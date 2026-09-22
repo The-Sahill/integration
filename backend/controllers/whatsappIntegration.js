@@ -10,19 +10,17 @@ app.webhook('/webhook', (req, res) => { // أو app.get
 });
 
 app.get('/webhook', (req, res) => {
-    const VERIFY_TOKEN = "yhihkuhyga"; // استبدل هذا الرمز بنفس الرمز الذي كتبته في لوحة تحكم ميتا
-
+    const VERIFY_TOKEN = "yhihkuhyga"; // تأكد أن الرمز هنا يطابق ما كتبته في لوحة ميتا تماماً
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    // تحقق من أن الـ mode والـ token صحيحة
     if (mode && token) {
         if (mode === 'subscribe' && token === VERIFY_TOKEN) {
             console.log('WEBHOOK_VERIFIED');
-            res.status(200).send(challenge); // الرد بالـ challenge لإتمام التوثيق بنجاح
+            res.status(200).send(challenge);
         } else {
-            res.sendStatus(403); // الرمز غير صحيح
+            res.sendStatus(403);
         }
     } else {
         res.sendStatus(400);
