@@ -1,0 +1,11 @@
+# node
+node_modules/
+.env
+dist/
+build/
+npm-debug.log
+.DS_Store
+
+# React
+*.log
+.cache/
