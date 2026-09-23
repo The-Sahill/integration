@@ -1,8 +1,8 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const { GoogleGenAI } = require('@google/genai'); // تأكد من تثبيت الحزمة الخاصة بي آي
-const { getPrompt } = require('./controllers/prompt')
+const { GoogleGenAI } = require('@google/genai'); 
+const { getPrompt } = require('./controllers/prompt'); // استدعاء ملف البرومبت الخارجي
 
 const app = express();
 app.use(bodyParser.json());
@@ -15,10 +15,6 @@ const ACCESS_TOKEN = 'EAAXC7VrGWOQBSj9ZBmZBhTqF14avsAbngIyrFHSAZBrRsJamNjNboQpvV
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
-
-// سياق منصة سوقية مخصص لموظف الحجوزات والاستقبال
-const RECEPTION_CONTEXT = `
-`;
 
 app.get('/webhook', (req, res) => {
     const VERIFY_TOKEN = "yhihkuhyga"; 
@@ -40,51 +36,42 @@ app.get('/webhook', (req, res) => {
 
 // استقبال الرسائل عبر الـ Webhook والرد عليها باستخدام الذكاء الاصطناعي
 app.post('/webhook', async (req, res) => {
+    // 1. الرد فوراً على ميتا لمنع تكرار الطلب وتجنب التاخير
+    res.status(200).send('EVENT_RECEIVED');
+
     const body = req.body;
 
     if (body.object === 'whatsapp_business_account') {
         try {
             for (const entry of body.entry) {
+                if (!entry.changes) continue;
                 for (const change of entry.changes) {
                     if (change.field === 'messages') {
                         const value = change.value;
                         
                         if (value.messages && value.messages.length > 0) {
                             const message = value.messages[0];
-                            const senderID = message.from; // رقم هاتف العميل
-                            const messageText = message.text ? message.text.body : ''; // نص الرسالة الواردة
+                            
+                            // تجاهل إشعارات الحالة (مثل delivered أو read)
+                            if (message.type !== 'text') continue;
 
-                            if (!messageText) continue;
+                            const senderID = message.from; // رقم هاتف العميل
+                            const messageText = message.text.body; // نص الرسالة الواردة
 
                             console.log(`رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
 
-                            // بناء برومبت موظف الحجوزات والاستقبال
-                            const prompt = `
-${getPrompt}
+                            // 2. جلب البرومبت الصحيح بتمرير نص رسالة العميل للدالة
+                            const prompt = getPrompt(messageText);
 
-العميل يسأل عبر الواتساب:
-"${messageText}"
-
-أنت موظف الحجوزات ومكتب الاستقبال في "The Sahill Stays".
-
-يتمثل دورك في الترحيب بالضيوف بحفاوة ومساعدتهم في الرد على استفساراتهم المتعلقة بالشقق، وأنواع الغرف، والمرافق، والخدمات، والموقع، وإجراءات تسجيل الوصول والمغادرة، وطرق الدفع، وسياسة التدخين، والحجوزات.
-
-احرص دائماً على الرد بأسلوب مهني وودود ومرحب ومتعاون.
-
-استخدم اللغة العربية إذا كان الضيف يتواصل بالعربية، واستخدم اللغة الإنجليزية إذا كان الضيف يتواصل بالإنجليزية؛ أي التزم دائماً باللغة التي يستخدمها الضيف.
-
-يتمثل هدفك الرئيسي في توفير تجربة سلسة ومفيدة للضيوف، مع تقديم معلومات دقيقة حول...
-`;
-
-                            // توليد الرد باستخدام نموذج جيميناي
+                            // 3. توليد الرد باستخدام نموذج جيميناي
                             const aiResponse = await ai.models.generateContent({
-                                model: "gemini-3.6-flash", // أو gemini-3.6-flash حسب المتاح لديك
+                                model: "gemini-2.5-flash", // استخدم النموذج المتوفر لديك
                                 contents: prompt,
                             });
 
-                            const replyText = aiResponse.text || "أهلاً بك في منصة سوقية، كيف يمكنني مساعدتك اليوم؟";
+                            const replyText = aiResponse.text || "أهلاً بك في The Sahill Stays، كيف يمكنني مساعدتك اليوم؟";
 
-                            // إرسال الرد للعميل عبر WhatsApp Cloud API باستخدام Axios
+                            // 4. إرسال الرد للعميل عبر WhatsApp Cloud API باستخدام Axios
                             await axios({
                                 method: 'POST',
                                 url: `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
@@ -110,10 +97,6 @@ ${getPrompt}
         } catch (error) {
             console.error('خطأ أثناء معالجة رسالة الواتساب أو الـ AI:', error.response ? error.response.data : error.message);
         }
-
-        res.status(200).send('EVENT_RECEIVED');
-    } else {
-        res.sendStatus(404);
     }
 });
 
