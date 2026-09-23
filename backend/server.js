@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai'); // تأكد من تثبيت الحزمة الخاصة بي آي
+const { getPrompt } = require('./controllers/prompt')
 
 const app = express();
 app.use(bodyParser.json());
@@ -16,7 +17,8 @@ const ai = new GoogleGenAI({
 });
 
 // سياق منصة سوقية مخصص لموظف الحجوزات والاستقبال
-const RECEPTION_CONTEXT = process.env.PROMPT
+const RECEPTION_CONTEXT = `
+`;
 
 app.get('/webhook', (req, res) => {
     const VERIFY_TOKEN = "yhihkuhyga"; 
@@ -58,7 +60,7 @@ app.post('/webhook', async (req, res) => {
 
                             // بناء برومبت موظف الحجوزات والاستقبال
                             const prompt = `
-${RECEPTION_CONTEXT}
+${getPrompt}
 
 العميل يسأل عبر الواتساب:
 "${messageText}"
