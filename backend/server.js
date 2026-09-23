@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 
 // بيانات الاعتماد الخاصة بـ WhatsApp Business API
 const PHONE_NUMBER_ID = '1328425043688424'; 
-const ACCESS_TOKEN = 'ضع_هنا_التوكن_الدائم_الجديد_الخاص_بك'; 
+const ACCESS_TOKEN = 'EAAXC7VrGWOQBSj9ZBmZBhTqF14avsAbngIyrFHSAZBrRsJamNjNboQpvVftNuMaVtKRkkHkiYJCoGoIt67SW4Y2g1Mdi94zMADWeXrNfYH5ZAZCgyH6DjoZAQi3EjcDcIcWETabrzCnZAB3Nhyplztqn8ZBIsAlLBGaRHZCJpt5mBsCnDQZByPvZCnTHcptxmTGHcTVgwZDZD'; 
 
 // إعداد الذكاء الاصطناعي
 const ai = new GoogleGenAI({
