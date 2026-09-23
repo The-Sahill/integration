@@ -65,7 +65,7 @@ app.post('/webhook', async (req, res) => {
 
                             // 3. توليد الرد باستخدام نموذج جيميناي
                             const aiResponse = await ai.models.generateContent({
-                                model: "gemini-2.5-flash", // استخدم النموذج المتوفر لديك
+                                model: "gemini-3.6-flash", // استخدم النموذج المتوفر لديك
                                 contents: prompt,
                             });
 
