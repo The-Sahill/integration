@@ -75,7 +75,7 @@ Never invent false information.
 
                             // توليد الرد باستخدام نموذج جيميناي
                             const aiResponse = await ai.models.generateContent({
-                                model: "gemini-2.5-flash", // أو gemini-3.6-flash حسب المتاح لديك
+                                model: "gemini-3.6-flash", // أو gemini-3.6-flash حسب المتاح لديك
                                 contents: prompt,
                             });
 
