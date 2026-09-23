@@ -7,7 +7,7 @@ app.use(bodyParser.json());
 
 // بيانات الاعتماد الخاصة بك في واتساب
 const PHONE_NUMBER_ID = '1328425043688424'; 
-const ACCESS_TOKEN = 'EAAXC7VrGWOQBSsoAXJXQuG6SPrArrrMkKiBvTTnFZBUynvl8SpxkRG1ZAMNslmRnafSTkFZBU6f0VgZAWeGQtj6t6dpoJNiG0ORzSjJ7BjF27EzpJAdO1Ua9ZC32CIfZA3SvL0ughPd0bZAYXQ0dVLMsHZAZBkcrwQWmXLRIctCdBC9AjwZCZBaZCrRWoOTi0YnFMsygWgZDZD'; // التوكن الدائم الخاص بك
+const ACCESS_TOKEN = 'EAAXC7VrGWOQBSj9ZBmZBhTqF14avsAbngIyrFHSAZBrRsJamNjNboQpvVftNuMaVtKRkkHkiYJCoGoIt67SW4Y2g1Mdi94zMADWeXrNfYH5ZAZCgyH6DjoZAQi3EjcDcIcWETabrzCnZAB3Nhyplztqn8ZBIsAlLBGaRHZCJpt5mBsCnDQZByPvZCnTHcptxmTGHcTVgwZDZD'; // التوكن الدائم الخاص بك
 
 app.get('/webhook', (req, res) => {
     const VERIFY_TOKEN = "yhihkuhyga"; // تأكد أن الرمز هنا يطابق ما كتبته في لوحة ميتا تماماً
