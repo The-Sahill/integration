@@ -1,16 +1,28 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const axios = require('axios'); // تأكد من تثبيتها عبر: npm install axios
+const axios = require('axios');
+const { GoogleGenAI } = require('@google/genai'); // تأكد من تثبيت الحزمة الخاصة بي آي
 
 const app = express();
 app.use(bodyParser.json());
 
-// بيانات الاعتماد الخاصة بك في واتساب
+// بيانات الاعتماد الخاصة بـ WhatsApp Business API
 const PHONE_NUMBER_ID = '1328425043688424'; 
-const ACCESS_TOKEN = 'EAAXC7VrGWOQBSj9ZBmZBhTqF14avsAbngIyrFHSAZBrRsJamNjNboQpvVftNuMaVtKRkkHkiYJCoGoIt67SW4Y2g1Mdi94zMADWeXrNfYH5ZAZCgyH6DjoZAQi3EjcDcIcWETabrzCnZAB3Nhyplztqn8ZBIsAlLBGaRHZCJpt5mBsCnDQZByPvZCnTHcptxmTGHcTVgwZDZD'; // التوكن الدائم الخاص بك
+const ACCESS_TOKEN = 'ضع_هنا_التوكن_الدائم_الجديد_الخاص_بك'; 
+
+// إعداد الذكاء الاصطناعي
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+// سياق منصة سوقية مخصص لموظف الحجوزات والاستقبال
+const RECEPTION_CONTEXT = `
+Xsooqia is a modern online marketplace similar to OpenSooq, where users can buy and sell different types of products and services, including real estate, cars, electronics, and services.
+The platform includes an auction system, promotional features, and AI-powered promotional video creation services.
+`;
 
 app.get('/webhook', (req, res) => {
-    const VERIFY_TOKEN = "yhihkuhyga"; // تأكد أن الرمز هنا يطابق ما كتبته في لوحة ميتا تماماً
+    const VERIFY_TOKEN = "yhihkuhyga"; 
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
@@ -27,13 +39,10 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// 2. استقبال الرسائل والإشعارات (Receive Messages - POST)
+// استقبال الرسائل عبر الـ Webhook والرد عليها باستخدام الذكاء الاصطناعي
 app.post('/webhook', async (req, res) => {
-    console.log("test");
-    
     const body = req.body;
 
-    // التأكد من أنه حدث متعلق بـ WhatsApp Business API
     if (body.object === 'whatsapp_business_account') {
         try {
             for (const entry of body.entry) {
@@ -41,16 +50,38 @@ app.post('/webhook', async (req, res) => {
                     if (change.field === 'messages') {
                         const value = change.value;
                         
-                        // التحقق مما إذا كانت هناك رسالة واردة جديدة
                         if (value.messages && value.messages.length > 0) {
                             const message = value.messages[0];
-                            const senderID = message.from; // رقم المرسل
-                            const messageText = message.text ? message.text.body : 'محتوى ليس بنص'; // نص الرسالة
+                            const senderID = message.from; // رقم هاتف العميل
+                            const messageText = message.text ? message.text.body : ''; // نص الرسالة الواردة
 
-                            console.log(`رسالة جديدة من: ${senderID}`);
-                            console.log(`نص الرسالة: ${messageText}`);
+                            if (!messageText) continue;
 
-                            // دالة الرد التلقائي باستخدام Axios
+                            console.log(`رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
+
+                            // بناء برومبت موظف الحجوزات والاستقبال
+                            const prompt = `
+${RECEPTION_CONTEXT}
+
+العميل يسأل عبر الواتساب:
+"${messageText}"
+
+You are the Reservation and Front Desk Receptionist for Xsooqia.
+Your role is to warmly greet customers, assist them with inquiries regarding bookings, appointments, services, and general platform navigation, and guide them politely.
+Always respond in a professional, welcoming, and helpful tone (preferably in Arabic unless the user writes in English).
+If a user asks about something completely unrelated to Xsooqia or outside the scope of customer service/bookings, politely refuse and state that you can only assist with Xsooqia services and bookings.
+Never invent false information.
+`;
+
+                            // توليد الرد باستخدام نموذج جيميناي
+                            const aiResponse = await ai.models.generateContent({
+                                model: "gemini-2.5-flash", // أو gemini-3.6-flash حسب المتاح لديك
+                                contents: prompt,
+                            });
+
+                            const replyText = aiResponse.text || "أهلاً بك في منصة سوقية، كيف يمكنني مساعدتك اليوم؟";
+
+                            // إرسال الرد للعميل عبر WhatsApp Cloud API باستخدام Axios
                             await axios({
                                 method: 'POST',
                                 url: `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
@@ -60,31 +91,29 @@ app.post('/webhook', async (req, res) => {
                                 },
                                 data: {
                                     messaging_product: 'whatsapp',
-                                    to: senderID, // إرسال الرد لنفس رقم العميل
+                                    to: senderID,
                                     type: 'text',
                                     text: {
-                                        body: `أهلاً بك! لقد استلامنا رسالتك: "${messageText}" وسنرد عليك قريباً.` // نص الرد
+                                        body: replyText
                                     }
                                 }
                             });
 
-                            console.log('تم إرسال الرد بنجاح إلى العميل');
+                            console.log('تم إرسال رد الذكاء الاصطناعي بنجاح إلى العميل');
                         }
                     }
                 }
             }
         } catch (error) {
-            console.error('خطأ أثناء إرسال الرد:', error.response ? error.response.data : error.message);
+            console.error('خطأ أثناء معالجة رسالة الواتساب أو الـ AI:', error.response ? error.response.data : error.message);
         }
 
-        // الرد على ميتا فوراً بأننا استلمنا الطلب بنجاح (ضروري جداً لتجنب إعادة إرسال الطلب)
         res.status(200).send('EVENT_RECEIVED');
     } else {
         res.sendStatus(404);
     }
 });
 
-// تشغيل السيرفر على المنفذ 3000
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
