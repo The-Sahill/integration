@@ -553,7 +553,7 @@ ${RECEPTION_CONTEXT}
                                 contents: prompt,
                             });
 
-                            const replyText = aiResponse.text || "أهلاً بك في منصة The Sahill Stays كيف يمكنني مساعدتك اليوم؟";
+                            const replyText = aiResponse.text || "أهلاً بك في منصة سوقية، كيف يمكنني مساعدتك اليوم؟";
 
                             // إرسال الرد للعميل عبر WhatsApp Cloud API باستخدام Axios
                             await axios({
