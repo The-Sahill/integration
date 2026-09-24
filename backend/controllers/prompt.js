@@ -495,4 +495,4 @@ ${RECEPTION_CONTEXT}
 `;
 }
 
-module.exports = { getPrompt };
+module.exports = { getPrompt, RECEPTION_CONTEXT };

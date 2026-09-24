@@ -2,7 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai'); // تأكد من تثبيت الحزمة الخاصة بي آي
-const {getPrompt} = require('./controllers/prompt')
+const { getPrompt } = require('./controllers/prompt');
+
 const app = express();
 app.use(bodyParser.json());
 
@@ -12,11 +13,8 @@ const ACCESS_TOKEN = 'EAAXC7VrGWOQBSj9ZBmZBhTqF14avsAbngIyrFHSAZBrRsJamNjNboQpvV
 
 // إعداد الذكاء الاصطناعي
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+    apiKey: process.env.GEMINI_API_KEY,
 });
-
-// سياق منصة سوقية مخصص لموظف الحجوزات والاستقبال
-const RECEPTION_CONTEXT = getPrompt;
 
 app.get('/webhook', (req, res) => {
     const VERIFY_TOKEN = "yhihkuhyga"; 
@@ -56,20 +54,16 @@ app.post('/webhook', async (req, res) => {
 
                             console.log(`رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
 
-                            // بناء برومبت موظف الحجوزات والاستقبال
-                            const prompt = `
-${RECEPTION_CONTEXT}
- 
- 
-`;
+                            // بناء برومبت موظف الحجوزات والاستقبال وتمرير رسالة العميل إليه
+                            const prompt = getPrompt(messageText);
 
                             // توليد الرد باستخدام نموذج جيميناي
                             const aiResponse = await ai.models.generateContent({
-                                model: "gemini-3.6-flash", // أو gemini-3.6-flash حسب المتاح لديك
+                                model: "gemini-2.5-flash", 
                                 contents: prompt,
                             });
 
-                            const replyText = aiResponse.text || "أهلاً بك في منصة سوقية، كيف يمكنني مساعدتك اليوم؟";
+                            const replyText = aiResponse.text || "أهلاً بك في The Sahill Stays، كيف يمكنني مساعدتك اليوم؟";
 
                             // إرسال الرد للعميل عبر WhatsApp Cloud API باستخدام Axios
                             await axios({
