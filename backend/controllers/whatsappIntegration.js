@@ -42,7 +42,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         try {
             // 1. إنشاء محادثة جديدة وتزويدها بالأدوات
             const chat = ai.chats.create({
-                model: "gemini-3.8-flash",
+                model: "gemini-2.5-flash",
                 config: {
                     tools: [{ functionDeclarations: [checkAvailableRoomsTool] }]
                 }
@@ -58,21 +58,23 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 if (call.name === 'checkAvailableRooms') {
                     console.log('🤖 الـ AI يستعلم الآن عن الغرف المتاحة من Zaaer API...');
 
-                    // جلب البيانات من زائر
+                    // جلب البيانات من Zaaer
                     const roomsData = await zaaerService.getAvailableRooms(
                         call.args?.checkInDate,
                         call.args?.checkOutDate
                     );
 
-                    // 4. إرسال نتيجة الدالة عبر الـ chat مباشرة دون إعداد الـ parts يدوياً
-                    response = await chat.sendMessage([
-                        {
-                            functionResponse: {
-                                name: 'checkAvailableRooms',
-                                response: { content: roomsData }
+                    // 4. إرسال نتيجة الدالة بالصياغة الصحيحة المعتمدة من @google/genai
+                    response = await chat.sendMessage({
+                        message: [
+                            {
+                                functionResponse: {
+                                    name: 'checkAvailableRooms',
+                                    response: { result: roomsData }
+                                }
                             }
-                        }
-                    ]);
+                        ]
+                    });
                 }
             }
 
