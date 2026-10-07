@@ -1,5 +1,6 @@
 // prompt.js
 
+const zaaerService = require('../controllers/zaaer');
 const RECEPTION_CONTEXT = `
 
 أنت المساعد الذكي والافتراضي الخاص بـ The Sahill Stays.
