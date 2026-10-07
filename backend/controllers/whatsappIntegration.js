@@ -40,51 +40,44 @@ async function sendWhatsAppMessage(recipientID, text) {
 async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // 1. إرسال الطلب مع أداة الفحص
-            const aiResponse = await ai.models.generateContent({
-                model: "gemini-3.8-flash",
-                contents: prompt,
+            // 1. إنشاء محادثة جديدة وتزويدها بالأدوات
+            const chat = ai.chats.create({
+                model: MODEL_NAME,
                 config: {
                     tools: [{ functionDeclarations: [checkAvailableRoomsTool] }]
                 }
             });
 
-            // 2. إذا قرر الـ AI جلب الغرف الفاضية
-            const functionCalls = aiResponse.functionCalls;
-            if (functionCalls && functionCalls.length > 0) {
-                const call = functionCalls[0];
+            // 2. إرسال النص الأول
+            let response = await chat.sendMessage({ message: prompt });
+
+            // 3. التحقق مما إذا كان النموذج يطلب استدعاء دالة
+            if (response.functionCalls && response.functionCalls.length > 0) {
+                const call = response.functionCalls[0];
 
                 if (call.name === 'checkAvailableRooms') {
-                    console.log('🤖 الـ AI يستعلم الآن عن الغرف المتاحة من Zaaer...');
-                    
+                    console.log('🤖 الـ AI يستعلم الآن عن الغرف المتاحة من Zaaer API...');
+
+                    // جلب البيانات من زائر
                     const roomsData = await zaaerService.getAvailableRooms(
                         call.args?.checkInDate,
                         call.args?.checkOutDate
                     );
 
-                    // 3. إعادة إرسال النتيجة للـ AI ليرد على النزيل بأرقام وأنواع الغرف الشاغرة
-                    const secondResponse = await ai.models.generateContent({
-                        model: "gemini-3.8-flash",
-                        contents: [
-                            { role: 'user', parts: [{ text: prompt }] },
-                            { role: 'model', parts: [{ functionCall: call }] },
-                            {
-                                role: 'user',
-                                parts: [{
-                                    functionResponse: {
-                                        name: 'checkAvailableRooms',
-                                        response: { result: roomsData }
-                                    }
-                                }]
+                    // 4. إرسال نتيجة الدالة عبر الـ chat مباشرة دون إعداد الـ parts يدوياً
+                    response = await chat.sendMessage([
+                        {
+                            functionResponse: {
+                                name: 'checkAvailableRooms',
+                                response: { content: roomsData }
                             }
-                        ]
-                    });
-
-                    return secondResponse.text;
+                        }
+                    ]);
                 }
             }
 
-            return aiResponse.text;
+            return response.text;
+
         } catch (error) {
             console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);
             if (attempt === retries) throw error;
@@ -92,6 +85,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         }
     }
 }
+
 
 module.exports = {
     sendWhatsAppMessage,
