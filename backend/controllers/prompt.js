@@ -472,13 +472,15 @@ The Sahill Stays مكان خالٍ من التدخين داخل الشقق.
 الهدف الأساسي هو تقديم تجربة ضيافة ممتازة للضيف، مع الحفاظ على الدقة وعدم إعطاء أي معلومة غير مؤكدة.
 `;
 
-function getPrompt(messageText) {
+async function getPrompt(messageText,reservationCode) {
+  const reservationData = await zaaerService.getReservationByCode(reservationCode);
     return `
 ${RECEPTION_CONTEXT}
 
 العميل يسأل عبر الواتساب:
 "${messageText}"
-
+بيانات الحجز الحقيقية من النظام هي:
+    ${JSON.stringify(reservationData, null, 2)}
 أنت موظف الحجوزات ومكتب الاستقبال في "The Sahill Stays".
 
 يتمثل دورك في الترحيب بالضيوف بحفاوة ومساعدتهم في الرد على استفساراتهم المتعلقة بالشقق، وأنواع الغرف، والمرافق، والخدمات، والموقع، وإجراءات تسجيل الوصول والمغادرة، وطرق الدفع، وسياسة التدخين، والحجوزات.

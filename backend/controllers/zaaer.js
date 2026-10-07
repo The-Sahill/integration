@@ -22,7 +22,24 @@ async function getAvailableRooms(checkInDate, checkOutDate) {
         throw new Error('تعذر جلب حالة الغرف من النظام.');
     }
 }
+async function getReservationByCode(reservationCode) {
+    try {
+        const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
+            headers: {
+                'Authorization': `Bearer ${ZAAER_TOKEN}`,
+                'Accept': 'application/json',
+            },
+            params: {
+                search: reservationCode // أو حسب المفتاح الخاص بالبحث في API Zaaer (مثل reservation_number أو code)
+            }
+        });
 
+        return response.data;
+    } catch (error) {
+        console.error('خطأ أثناء جلب تفاصيل الحجز من Zaaer:', error.response?.data || error.message);
+        throw new Error('تعذر جلب تفاصيل الحجز من النظام.');
+    }
+}
 module.exports = {
-    getAvailableRooms
+    getAvailableRooms,getReservationByCode
 };
