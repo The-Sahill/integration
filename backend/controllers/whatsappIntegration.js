@@ -7,10 +7,10 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,
 });
 
-// 1. أداة الاستعلام عن الحجوزات
+// تعريف الأداة للذكاء الاصطناعي
 const getReservationsTool = {
     name: 'getReservations',
-    description: 'جلب وقراءة بيانات الحجوزات من نظام زائر للتحقق من تفاصيل حجز العميل مثل رقم الحجز، تاريخ الدخول والخروج، وحالة الدفع',
+    description: 'جلب وقراءة بيانات الحجوزات من نظام زائر للتحقق من تفاصيل حجز العميل مثل رقم الحجز، تاريخ الدخول والخروج، واسم النزيل',
     parameters: {
         type: 'OBJECT',
         properties: {
@@ -44,7 +44,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // إنشاء محادثة جديدة
+            // 1. إنشاء المحادثة
             const chat = ai.chats.create({
                 model: "gemini-3.8-flash",
                 config: {
@@ -52,10 +52,10 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
             });
 
-            // إرسال النص الصريح
+            // 2. إرسال طلب المستخدم
             let response = await chat.sendMessage({ message: textPrompt });
 
-            // الاستجابة لاستدعاء الدوال
+            // 3. التحقق من وجود Function Call
             if (response.functionCalls && response.functionCalls.length > 0) {
                 const call = response.functionCalls[0];
 
@@ -63,9 +63,11 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                     console.log('🤖 الـ AI يبحث عن الحجز في Zaaer API...');
 
                     const searchQuery = call.args?.searchQuery || '';
+                    
+                    // انتظار نتيجة الـ API بشكل صحيح
                     const reservations = await zaaerService.getReservations(searchQuery);
 
-                    // إرسال نتائج الحجوزات للـ AI بقالب سليم
+                    // إرسال نتيجة الـ API للنموذج للحصول على الرد النهائي
                     response = await chat.sendMessage({
                         message: [
                             {
@@ -79,7 +81,8 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
             }
 
-            return response.text;
+            // إرجاع النص النهائي فقط للتأكد من عدم خروج Promise
+            return response.text || "أهلاً بك، كيف يمكنني مساعدتك اليوم؟";
 
         } catch (error) {
             console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);
