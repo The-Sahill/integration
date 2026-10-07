@@ -42,7 +42,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         try {
             // 1. إنشاء محادثة جديدة وتزويدها بالأدوات
             const chat = ai.chats.create({
-                model: "gemini-2.5-flash",
+                model: "gemini-3.8-flash",
                 config: {
                     tools: [{ functionDeclarations: [checkAvailableRoomsTool] }]
                 }
