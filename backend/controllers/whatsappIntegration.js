@@ -1,66 +1,47 @@
-const express = require('express');
-const bodyParser = require('body-parser');
+// whatsappService.js
+const axios = require('axios');
+const { GoogleGenAI } = require('@google/genai');
 
-const app = express();
-app.use(bodyParser.json());
-
-// 1. نقطة التحقق (Webhook Verification - GET)
-// هذه الطريقة تستخدمها ميتا للتحقق من صحة الرابط (Callback URL) عند الضغط على Verify and save
-app.webhook('/webhook', (req, res) => { // أو app.get
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
 });
 
-app.get('/webhook', (req, res) => {
-    const VERIFY_TOKEN = "yhihkuhyga"; // تأكد أن الرمز هنا يطابق ما كتبته في لوحة ميتا تماماً
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-
-    if (mode && token) {
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-            console.log('WEBHOOK_VERIFIED');
-            res.status(200).send(challenge);
-        } else {
-            res.sendStatus(403);
+// دالة إرسال رسالة عبر واتساب
+async function sendWhatsAppMessage(recipientID, text) {
+    await axios({
+        method: 'POST',
+        url: `https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
+        headers: {
+            'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+        },
+        data: {
+            messaging_product: 'whatsapp',
+            to: recipientID,
+            type: 'text',
+            text: { body: text }
         }
-    } else {
-        res.sendStatus(400);
-    }
-});
+    });
+}
 
-// 2. استقبال الرسائل والإشعارات (Receive Messages - POST)
-// هذا الـ Endpoint الذي سترسل ميتا إليه رسائل المستخدمين وبيانات التوصيل
-app.post('/webhook', (req, res) => {
-    const body = req.body;
-
-    // التأكد من أنه حدث متعلق بـ WhatsApp Business API
-    if (body.object === 'whatsapp_business_account') {
-        body.entry.forEach(entry => {
-            entry.changes.forEach(change => {
-                if (change.field === 'messages') {
-                    const value = change.value;
-                    
-                    // التحقق مما إذا كانت هناك رسالة واردة جديدة
-                    if (value.messages && value.messages.length > 0) {
-                        const message = value.messages[0];
-                        const senderID = message.from; // رقم المرسل
-                        const messageText = message.text ? message.text.body : 'محتوى ليس بنص'; // نص الرسالة
-
-                        console.log(`رسالة جديدة من: ${senderID}`);
-                        console.log(`نص الرسالة: ${messageText}`);
-                    }
-                }
+// دالة توليد رد الذكاء الاصطناعي مع إعادة المحاولة
+async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const aiResponse = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
             });
-        });
-
-        // الرد على ميتا فوراً بأننا استلمنا الطلب بنجاح (ضروري جداً لتجنب إعادة إرسال الطلب)
-        res.status(200).send('EVENT_RECEIVED');
-    } else {
-        res.sendStatus(404);
+            return aiResponse.text;
+        } catch (error) {
+            console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);
+            if (attempt === retries) throw error;
+            await new Promise(res => setTimeout(res, delay));
+        }
     }
-});
+}
 
-// تشغيل السيرفر على المنفذ 3000
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+module.exports = {
+    sendWhatsAppMessage,
+    generateAIContentWithRetry
+};
