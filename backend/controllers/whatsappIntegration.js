@@ -7,15 +7,17 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,
 });
 
-// تعريف الأداة للذكاء الاصطناعي
-const checkAvailableRoomsTool = {
-    name: 'checkAvailableRooms',
-    description: 'استعلام عن الغرف الشاغرة والمتاحة للحجز في الفندق',
+// 1. أداة الاستعلام عن الحجوزات
+const getReservationsTool = {
+    name: 'getReservations',
+    description: 'جلب وقراءة بيانات الحجوزات من نظام زائر للتحقق من تفاصيل حجز العميل مثل رقم الحجز، تاريخ الدخول والخروج، وحالة الدفع',
     parameters: {
         type: 'OBJECT',
         properties: {
-            checkInDate: { type: 'STRING', description: 'تاريخ الوصول إذا ذكره العميل (YYYY-MM-DD)' },
-            checkOutDate: { type: 'STRING', description: 'تاريخ المغادرة إذا ذكره العميل (YYYY-MM-DD)' }
+            searchQuery: { 
+                type: 'STRING', 
+                description: 'رقم الحجز مثل REV2026024 أو اسم النزيل للبحث عنه' 
+            }
         }
     }
 };
@@ -38,39 +40,38 @@ async function sendWhatsAppMessage(recipientID, text) {
 }
 
 async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
+    const textPrompt = typeof prompt === 'string' ? prompt : String(prompt || '');
+
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // 1. إنشاء محادثة جديدة وتزويدها بالأدوات
+            // إنشاء محادثة جديدة
             const chat = ai.chats.create({
                 model: "gemini-3.8-flash",
                 config: {
-                    tools: [{ functionDeclarations: [checkAvailableRoomsTool] }]
+                    tools: [{ functionDeclarations: [getReservationsTool] }]
                 }
             });
 
-            // 2. إرسال النص الأول
-            let response = await chat.sendMessage({ message: prompt });
+            // إرسال النص الصريح
+            let response = await chat.sendMessage({ message: textPrompt });
 
-            // 3. التحقق مما إذا كان النموذج يطلب استدعاء دالة
+            // الاستجابة لاستدعاء الدوال
             if (response.functionCalls && response.functionCalls.length > 0) {
                 const call = response.functionCalls[0];
 
-                if (call.name === 'checkAvailableRooms') {
-                    console.log('🤖 الـ AI يستعلم الآن عن الغرف المتاحة من Zaaer API...');
+                if (call.name === 'getReservations') {
+                    console.log('🤖 الـ AI يبحث عن الحجز في Zaaer API...');
 
-                    // جلب البيانات من Zaaer
-                    const roomsData = await zaaerService.getAvailableRooms(
-                        call.args?.checkInDate,
-                        call.args?.checkOutDate
-                    );
+                    const searchQuery = call.args?.searchQuery || '';
+                    const reservations = await zaaerService.getReservations(searchQuery);
 
-                    // 4. إرسال نتيجة الدالة بالصياغة الصحيحة المعتمدة من @google/genai
+                    // إرسال نتائج الحجوزات للـ AI بقالب سليم
                     response = await chat.sendMessage({
                         message: [
                             {
                                 functionResponse: {
-                                    name: 'checkAvailableRooms',
-                                    response: { result: roomsData }
+                                    name: 'getReservations',
+                                    response: { result: reservations }
                                 }
                             }
                         ]
@@ -87,7 +88,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         }
     }
 }
-
 
 module.exports = {
     sendWhatsAppMessage,
