@@ -42,7 +42,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         try {
             // 1. إرسال الطلب مع أداة الفحص
             const aiResponse = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3.8-flash",
                 contents: prompt,
                 config: {
                     tools: [{ functionDeclarations: [checkAvailableRoomsTool] }]
