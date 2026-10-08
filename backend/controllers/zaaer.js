@@ -26,11 +26,11 @@ async function getReservations() {
         return items.map(item => ({
             id: item.id,
             // تجربة أكثر من مسار متوقع من Zaaer API لاستخراج رقم/اسم الغرفة
-            unit_name: item.unit?.name || item.unit_name || item.property?.name || item.room_number || item.unit_name   || `وحدة #${item.unit_id || item.id}`,
+            unit_name:  item.unit_name   || `وحدة #${item.unit_id || item.id}`,
             check_in_date: item.check_in_date || item.check_in,
             check_out_date: item.check_out_date || item.check_out,
             status: item.reservation_status || item.status || 'confirmed',
-            unit_type_name: item.unit?.type || item.unit_type || item.property?.category_name  || item.unit_type_name,
+            unit_type_name:  item.unit_type_name,
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الحجوزات:', error.message);
