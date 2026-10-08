@@ -13,6 +13,7 @@ const getHeaders = () => ({
 /**
  * 1. جلب قائمة الحجوزات مع الحقول ذات الصلة بالتوفر
  */
+// في ملف services/zaaerService.js
 async function getReservations() {
     try {
         const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
@@ -20,18 +21,18 @@ async function getReservations() {
             params: { page: 1, limit: 50 }
         });
 
-        const items = response.data?.result?.items || response.data?.items || response.data?.data || [];
+        const items = response.data?.result?.items || response.data?.items || [];
 
-        // استخراج تفاصيل الحجز الضرورية لحساب الشاغر
         return items.map(item => ({
-            id: item.id || item.number,
-            unit_name: item.unit_name || item.unit?.name || 'غير محدد',
+            id: item.id,
+            // تجربة أكثر من مسار متوقع من Zaaer API لاستخراج رقم/اسم الغرفة
+            unit_name: item.unit?.name || item.unit_name || item.property?.name || item.room_number || `وحدة #${item.unit_id || item.id}`,
             check_in_date: item.check_in_date || item.check_in,
             check_out_date: item.check_out_date || item.check_out,
             status: item.reservation_status || item.status || 'confirmed'
         }));
     } catch (error) {
-        console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
+        console.error('خطأ أثناء جلب الحجوزات:', error.message);
         return [];
     }
 }
