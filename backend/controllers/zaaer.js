@@ -18,41 +18,69 @@ const getHeaders = () => ({
 /**
  * جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
  */
+// services/zaaerService.js
+
 async function getReservations() {
     try {
-        const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
-            headers: getHeaders(),
-            params: { page: 1, limit: 50 }
-        });
+        let allReservations = [];
+        let currentPage = 1;
+        let hasMorePages = true;
+        const limitPerPage = 100;
 
-        const items = response.data?.result?.items || response.data?.items || [];
+        // 1. جلب كافة الصفحات من النظام
+        while (hasMorePages) {
+            const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
+                headers: getHeaders(),
+                params: { page: currentPage, limit: limitPerPage }
+            });
 
-        return items.map(item => {
-            // 1. استخراج أول غرفة من مصفوفة rooms
-            const primaryRoom = Array.isArray(item.rooms) && item.rooms.length > 0 
-                ? item.rooms[0] 
-                : {};
+            const items = response.data?.result?.items || response.data?.items || [];
 
-            // 2. استخراج اسم الضيف الصحيح من داخل كائن guest
-            const guestName = item.guest?.name || item.guest_name || 'غير محدد';
+            if (items.length === 0) {
+                hasMorePages = false;
+                break;
+            }
 
-            // 3. استخراج رقم الغرفة من داخل مصفوفة الغرف
-            const unitName = primaryRoom.unit_name || item.unit_name || 'غير محدد';
+            allReservations.push(...items);
 
-            // 4. استخراج نوع الغرفة/الشقة
-            const unitTypeName = primaryRoom.unit_type_name || item.unit_type_name || 'غير محدد';
+            const meta = response.data?.result?.meta || response.data?.meta;
+            if (meta && meta.last_page) {
+                hasMorePages = currentPage < meta.last_page;
+            } else {
+                hasMorePages = items.length === limitPerPage;
+            }
+            currentPage++;
+        }
 
-            return {
-                id: item.id,
-                reservation_number: item.number,
-                guest_name: guestName,
-                unit_name: unitName,
-                unit_type_name: unitTypeName,
-                check_in_date: item.check_in_date,
-                check_out_date: item.check_out_date,
-                status: item.reservation_status || item.status || 'confirmed'
-            };
-        });
+        // 2. قائمة الحالات المطلوب عرضها فقط (تجاهل الملغاة والمغادرة)
+        const activeStatuses = ['confirmed', 'unconfirmed', 'checked_in'];
+
+        // 3. فلترة البيانات وتنسيقها
+        const filteredReservations = allReservations
+            .filter(item => {
+                const currentStatus = item.reservation_status || item.status || '';
+                return activeStatuses.includes(currentStatus.toLowerCase());
+            })
+            .map(item => {
+                const primaryRoom = Array.isArray(item.rooms) && item.rooms.length > 0 ? item.rooms[0] : {};
+
+                return {
+                    id: item.id,
+                    reservation_number: item.number,
+                    guest_name: item.guest?.name || 'غير محدد',
+                    unit_name: primaryRoom.unit_name || item.unit_name || 'غير محدد',
+                    unit_type_name: primaryRoom.unit_type_name || 'غير محدد',
+                    check_in_date: item.check_in_date,
+                    check_out_date: item.check_out_date,
+                    // ترجمة حالة الحجز ليفهمها الـ AI والمستخدم بوضوح
+                    status: item.reservation_status === 'checked_in' ? 'مقيم حالياً' : 'مؤكد / بانتظار الوصول'
+                };
+            });
+
+        console.log(`📊 إجمالي الحجوزات النشطة والمستقبلية: ${filteredReservations.length} من أصل ${allReservations.length}`);
+
+        return filteredReservations;
+
     } catch (error) {
         console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
         return [];
