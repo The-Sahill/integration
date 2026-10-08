@@ -28,17 +28,26 @@ async function getReservations() {
         const items = response.data?.result?.items || response.data?.items || [];
 
         return items.map(item => {
-            // استخراج أول غرفة مسجلة بداخل الحجز
-            const primaryRoom = item.rooms && item.rooms.length > 0 ? item.rooms[0] : {};
+            // 1. استخراج أول غرفة من مصفوفة rooms
+            const primaryRoom = Array.isArray(item.rooms) && item.rooms.length > 0 
+                ? item.rooms[0] 
+                : {};
+
+            // 2. استخراج اسم الضيف الصحيح من داخل كائن guest
+            const guestName = item.guest?.name || item.guest_name || 'غير محدد';
+
+            // 3. استخراج رقم الغرفة من داخل مصفوفة الغرف
+            const unitName = primaryRoom.unit_name || item.unit_name || 'غير محدد';
+
+            // 4. استخراج نوع الغرفة/الشقة
+            const unitTypeName = primaryRoom.unit_type_name || item.unit_type_name || 'غير محدد';
 
             return {
                 id: item.id,
                 reservation_number: item.number,
-                // جلب رقم الغرفة المباشر من داخل مصفوفة rooms (مثال: "102", "205", "301")
-                unit_name: primaryRoom.unit_name || item.unit_name || 'غير محدد',
-                name: item.name || 'ضيف مجهول',
-                // جلب نوع الشقة (مثال: "استديو (غرفه/صاله/صوفابد)")
-                unit_type_name: primaryRoom.unit_type_name || 'غير محدد',
+                guest_name: guestName,
+                unit_name: unitName,
+                unit_type_name: unitTypeName,
                 check_in_date: item.check_in_date,
                 check_out_date: item.check_out_date,
                 status: item.reservation_status || item.status || 'confirmed'
@@ -49,7 +58,6 @@ async function getReservations() {
         return [];
     }
 }
-
 /**
  * 2. جلب قائمة الغرف/الوحدات مع التفاصيل الكاملة (الأسعار، الطاقة الاستيعابية، والمواصفات)
  */
