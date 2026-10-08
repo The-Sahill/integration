@@ -36,6 +36,7 @@ async function getReservations() {
                 reservation_number: item.number,
                 // جلب رقم الغرفة المباشر من داخل مصفوفة rooms (مثال: "102", "205", "301")
                 unit_name: primaryRoom.unit_name || item.unit_name || 'غير محدد',
+                name: item.guest_name || item.name || 'ضيف مجهول',
                 // جلب نوع الشقة (مثال: "استديو (غرفه/صاله/صوفابد)")
                 unit_type_name: primaryRoom.unit_type_name || 'غير محدد',
                 check_in_date: item.check_in_date,
