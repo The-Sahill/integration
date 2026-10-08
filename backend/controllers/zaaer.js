@@ -25,8 +25,7 @@ async function getReservations() {
 
         return items.map(item => ({
             id: item.id,
-            // يقرأ unit_name المباشر ("102") أولاً، ثم الخيارات البديلة إذا لم يتوفر
-            unit_name: item.unit_name || item.unit?.name || item.unit_number || `وحدة #${item.unit_id || item.id}`,
+            unit_name: item.unit_name || item.unit?.name || item.unit_number,
             check_in_date: item.check_in_date || item.check_in,
             check_out_date: item.check_out_date || item.check_out,
             status: item.reservation_status || item.status || 'confirmed',
