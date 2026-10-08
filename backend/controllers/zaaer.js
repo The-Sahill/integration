@@ -13,7 +13,11 @@ const getHeaders = () => ({
 /**
  * 1. جلب قائمة الحجوزات مع الحقول ذات الصلة بالتوفر
  */
-// في ملف services/zaaerService.js
+// في ملف services/zaaerService.js// services/zaaerService.js
+
+/**
+ * جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
+ */
 async function getReservations() {
     try {
         const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
@@ -23,16 +27,24 @@ async function getReservations() {
 
         const items = response.data?.result?.items || response.data?.items || [];
 
-        return items.map(item => ({
-            id: item.id,
-            unit_name: item.unit_name || item.unit?.name || item.unit_number ,
-            check_in_date: item.check_in_date || item.check_in,
-            check_out_date: item.check_out_date || item.check_out,
-            status: item.reservation_status || item.status || 'confirmed',
-            unit_type_name: item.unit_type_name || item.unit?.unit_type_name || 'غير محدد',
-        }));
+        return items.map(item => {
+            // استخراج أول غرفة مسجلة بداخل الحجز
+            const primaryRoom = item.rooms && item.rooms.length > 0 ? item.rooms[0] : {};
+
+            return {
+                id: item.id,
+                reservation_number: item.number,
+                // جلب رقم الغرفة المباشر من داخل مصفوفة rooms (مثال: "102", "205", "301")
+                unit_name: primaryRoom.unit_name || item.unit_name || 'غير محدد',
+                // جلب نوع الشقة (مثال: "استديو (غرفه/صاله/صوفابد)")
+                unit_type_name: primaryRoom.unit_type_name || 'غير محدد',
+                check_in_date: item.check_in_date,
+                check_out_date: item.check_out_date,
+                status: item.reservation_status || item.status || 'confirmed'
+            };
+        });
     } catch (error) {
-        console.error('خطأ أثناء جلب الحجوزات:', error.message);
+        console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
         return [];
     }
 }
