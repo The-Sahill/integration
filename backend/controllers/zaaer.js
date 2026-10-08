@@ -24,8 +24,12 @@ async function getReservations() {
         const items = response.data?.result?.items || response.data?.items || [];
 
         return items.map(item => ({
-            name: item.name ,
+            id: item.id,
+            unit_name: item.unit_name || item.unit?.name || item.unit_number ,
+            check_in_date: item.check_in_date || item.check_in,
+            check_out_date: item.check_out_date || item.check_out,
             status: item.reservation_status || item.status || 'confirmed',
+            unit_type_name: item.unit_type_name || item.unit?.unit_type_name || 'غير محدد',
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الحجوزات:', error.message);
@@ -49,14 +53,13 @@ async function getProperties() {
         // تمرير التفاصيل الشاملة للغرف حتى يتعرف الذكاء الاصطناعي على مواصفاتها
         return items.map(item => ({
             id: item.id,
-            unit_name: item.name || item.unit_name || 'غير محدد',
+            unit_name: item.name || item.title || item.unit_number || `شقة ${item.id}`,
             type: item.type || item.category_name || item.rate_plan ||  item.unit_type_name || 'غير محدد',
             capacity: item.capacity || item.max_guests || 'حسب نوع الشقة',
             beds: item.bedrooms_count || item.beds || 'غير محدد',
             price_per_night: item.base_price || item.rate || item.price || 'يتحدد حسب التواريخ',
             description: item.description || item.notes || '',
             status: item.status || 'متاحة'
-
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الوحدات من Zaaer:', error.response?.data || error.message);
