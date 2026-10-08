@@ -55,7 +55,7 @@ async function getProperties() {
         return items.map(item => ({
             id: item.id,
             unit_name: item.name || item.title || item.unit_number || `شقة ${item.id}`,
-            type: item.type || item.category_name || item.rate_plan || 'شقة فندقية',
+            type: item.type || item.category_name || item.rate_plan ||  item.unit_type_name || 'غير محدد',
             capacity: item.capacity || item.max_guests || 'حسب نوع الشقة',
             beds: item.bedrooms_count || item.beds || 'غير محدد',
             price_per_night: item.base_price || item.rate || item.price || 'يتحدد حسب التواريخ',
