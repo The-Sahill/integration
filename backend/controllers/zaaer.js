@@ -4,96 +4,61 @@ const axios = require('axios');
 const ZAAER_BASE_URL = process.env.ZAAER_BASE_URL || 'https://sahl-suites.zaaer.com/api/v1';
 const ZAAER_TOKEN = process.env.ZAAER_API_TOKEN || '1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea';
 
-// إعداد الهيدرز الموحدة
+// إعداد الترويسات الموحدة
 const getHeaders = () => ({
     'Authorization': `Bearer ${ZAAER_TOKEN}`,
     'Accept': 'application/json',
 });
 
 /**
- * 1. جلب الحجوزات والمساعدة في تحديد الشاغر
+ * 1. جلب قائمة الحجوزات المخصصة (الحقول المطلوبة فقط)
  */
-async function getAvailableRooms(checkInDate, checkOutDate) {
+async function getReservations() {
     try {
         const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
             headers: getHeaders(),
-            params: {
-                page: 1,
-                limit: 100
-            }
+            params: { page: 1, limit: 50 }
         });
 
-        // استخراج القائمة المباشرة من استجابة زائر
-        const items = response.data?.result?.items || [];
+        const items = response.data?.result?.items || response.data?.items || [];
 
-        return {
-            status: "success",
-            checkInDate: checkInDate || null,
-            checkOutDate: checkOutDate || null,
-            total_reservations: items.length,
-            reservations: items
-        };
+        // استخراج وتخصيص البيانات المطلوبة فقط للـ AI
+        return items.map(item => ({
+            unit_name: item.unit_name || item.unit?.name || 'غير محدد',
+            check_in_date: item.check_in_date,
+            check_out_date: item.check_out_date,
+        }));
     } catch (error) {
-        console.error('خطأ أثناء جلب حالة الغرف من Zaaer:', error.response?.data || error.message);
-        throw new Error('تعذر جلب حالة الغرف من النظام.');
+        console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
+        return [];
     }
 }
 
 /**
- * 2. البحث عن حجز معين برقم الحجز أو اسم النزيل
+ * 2. جلب قائمة الغرف / الوحدات المتاحة في النظام
  */
-async function getReservationByCode(reservationCode) {
+async function getProperties() {
     try {
-        // جلب آخر الحجوزات لفلترتها
-        const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
+        const response = await axios.get(`${ZAAER_BASE_URL}/properties`, {
             headers: getHeaders(),
-            params: {
-                page: 1,
-                limit: 100,
-                search: reservationCode // إرسال المعامل للـ API إن كان يدعمه
-            }
+            params: { page: 1, limit: 50 }
         });
 
-        const items = response.data?.result?.items || [];
+        const items = response.data?.result?.items || response.data?.items || [];
 
-        if (!reservationCode) {
-            return { status: "success", count: items.length, items };
-        }
-
-        const cleanCode = String(reservationCode).trim().toLowerCase();
-
-        // فلترة النتائج محلياً لضمان إيجاد الحجز حتى لو لم يدعم الـ API معيار search
-        const matchedReservations = items.filter(item => {
-            const numberMatch = item.number && String(item.number).toLowerCase().includes(cleanCode);
-            const bookingIdMatch = item.booking_id && String(item.booking_id).toLowerCase().includes(cleanCode);
-            const guestNameMatch = item.guest?.name && String(item.guest.name).toLowerCase().includes(cleanCode);
-
-            return numberMatch || bookingIdMatch || guestNameMatch;
-        });
-
-        if (matchedReservations.length > 0) {
-            return {
-                status: "success",
-                found: true,
-                count: matchedReservations.length,
-                reservation: matchedReservations[0], // إرجاع أول حجز مطابق
-                all_matches: matchedReservations
-            };
-        }
-
-        return {
-            status: "success",
-            found: false,
-            message: `لم يتم العثور على أي حجز برقم أو اسم: ${reservationCode}`
-        };
-
+        // استخراج اسم ووصف/تفاصيل كل غرفة
+        return items.map(item => ({
+            id: item.id,
+            name: item.name || item.title,
+            type: item.type || 'شقة'
+        }));
     } catch (error) {
-        console.error('خطأ أثناء جلب تفاصيل الحجز من Zaaer:', error.response?.data || error.message);
-        throw new Error('تعذر جلب تفاصيل الحجز من النظام.');
+        console.error('خطأ أثناء جلب الوحدات من Zaaer:', error.response?.data || error.message);
+        return [];
     }
 }
 
 module.exports = {
-    getAvailableRooms,
-    getReservationByCode
+    getReservations,
+    getProperties
 };
