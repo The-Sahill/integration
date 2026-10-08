@@ -1,6 +1,7 @@
 // controllers/webhookController.js
 const { getPrompt } = require('./prompt');
 const { sendWhatsAppMessage, generateAIContentWithRetry } = require('../controllers/whatsappIntegration');
+const zaaerService = require('../controllers/zaaer'); // استدعاء خدمة Zaaer
 
 // معالجة طلب التحقق (GET)
 const verifyWebhook = (req, res) => {
@@ -43,17 +44,27 @@ const handleIncomingMessage = async (req, res) => {
 
                             console.log(`رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
 
-                            const prompt = getPrompt(messageText);
+                            // 1. جلب بيانات الحجوزات والغرف بشكل متوازي لسريعة الأداء
+                            const [reservationsData, roomsData] = await Promise.all([
+                                zaaerService.getReservations(),
+                                zaaerService.getProperties()
+                            ]);
+
+                            // 2. بناء الـ Prompt المخصص وملاحظة استخدام await لأن getPrompt دالة async
+                            const prompt = await getPrompt(messageText, reservationsData, roomsData);
+
                             let replyText = "";
 
+                            // 3. توليد الرد عبر الذكاء الاصطناعي
                             try {
                                 const aiText = await generateAIContentWithRetry(prompt, 3, 1000);
-                                replyText = aiText || "أهلاً بك كيف يمكنني مساعدتك اليوم؟";
+                                replyText = aiText || "أهلاً بك، كيف يمكنني مساعدتك اليوم؟";
                             } catch (aiError) {
                                 console.error('فشلت جميع محاولات الاتصال بالذكاء الاصطناعي:', aiError.message);
-                                replyText = "يوجد عطل فني في الرد التلقائي من الرد الآلي للحجوزات و الاستفسار يرجى التواصل على الرقم 00962791772424";
+                                replyText = "يوجد عطل فني في الرد التلقائي للحجوزات والاستفسار، يرجى التواصل على الرقم 00962791772424";
                             }
 
+                            // 4. إرسال الرد للعميل عبر الواتساب
                             await sendWhatsAppMessage(senderID, replyText);
                             console.log('تم إرسال الرد بنجاح إلى العميل');
                         }
