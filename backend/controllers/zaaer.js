@@ -24,12 +24,8 @@ async function getReservations() {
         const items = response.data?.result?.items || response.data?.items || [];
 
         return items.map(item => ({
-            id: item.id,
-            unit_name: item.unit_name || item.unit?.name || item.unit_number,
-            check_in_date: item.check_in_date || item.check_in,
-            check_out_date: item.check_out_date || item.check_out,
+            name: item.name ,
             status: item.reservation_status || item.status || 'confirmed',
-            unit_type_name: item.unit_type_name || item.unit?.unit_type_name || 'غير محدد',
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الحجوزات:', error.message);
