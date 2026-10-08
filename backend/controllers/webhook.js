@@ -42,16 +42,29 @@ const handleIncomingMessage = async (req, res) => {
 
                             if (!messageText) continue;
 
-                            console.log(`رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
+                            console.log(`\n==================================================`);
+                            console.log(`📩 رسالة جديدة من: ${senderID} -> النص: ${messageText}`);
 
-                            // 1. جلب بيانات الحجوزات والغرف بشكل متوازي لسريعة الأداء
+                            // 1. جلب بيانات الحجوزات والغرف بشكل متوازي
                             const [reservationsData, roomsData] = await Promise.all([
                                 zaaerService.getReservations(),
                                 zaaerService.getProperties()
                             ]);
 
-                            // 2. بناء الـ Prompt المخصص وملاحظة استخدام await لأن getPrompt دالة async
+                            // 🔍 طباعة البيانات المستقبلة من API زائر للتأكد من وجودها
+                            console.log("=== 📦 بيانات الغرف المجلوبة من Zaaer ===");
+                            console.log(JSON.stringify(roomsData, null, 2));
+
+                            console.log("=== 📅 بيانات الحجوزات المجلوبة من Zaaer ===");
+                            console.log(JSON.stringify(reservationsData, null, 2));
+
+                            // 2. بناء الـ Prompt المخصص
                             const prompt = await getPrompt(messageText, reservationsData, roomsData);
+
+                            // 🔍 طباعة الـ Prompt النهائي المرسل للذكاء الاصطناعي
+                            console.log("=== 🤖 النص الكامل (Prompt) المرسل للـ AI ===");
+                            console.log(prompt);
+                            console.log(`==================================================\n`);
 
                             let replyText = "";
 
@@ -66,7 +79,7 @@ const handleIncomingMessage = async (req, res) => {
 
                             // 4. إرسال الرد للعميل عبر الواتساب
                             await sendWhatsAppMessage(senderID, replyText);
-                            console.log('تم إرسال الرد بنجاح إلى العميل');
+                            console.log('✅ تم إرسال الرد بنجاح إلى العميل');
                         }
                     }
                 }

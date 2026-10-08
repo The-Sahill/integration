@@ -11,7 +11,7 @@ const getHeaders = () => ({
 });
 
 /**
- * 1. جلب قائمة الحجوزات المخصصة (الحقول المطلوبة فقط)
+ * 1. جلب قائمة الحجوزات مع الحقول ذات الصلة بالتوفر
  */
 async function getReservations() {
     try {
@@ -20,13 +20,15 @@ async function getReservations() {
             params: { page: 1, limit: 50 }
         });
 
-        const items = response.data?.result?.items || response.data?.items || [];
+        const items = response.data?.result?.items || response.data?.items || response.data?.data || [];
 
-        // استخراج وتخصيص البيانات المطلوبة فقط للـ AI
+        // استخراج تفاصيل الحجز الضرورية لحساب الشاغر
         return items.map(item => ({
+            id: item.id || item.number,
             unit_name: item.unit_name || item.unit?.name || 'غير محدد',
-            check_in_date: item.check_in_date,
-            check_out_date: item.check_out_date,
+            check_in_date: item.check_in_date || item.check_in,
+            check_out_date: item.check_out_date || item.check_out,
+            status: item.reservation_status || item.status || 'confirmed'
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
@@ -35,22 +37,28 @@ async function getReservations() {
 }
 
 /**
- * 2. جلب قائمة الغرف / الوحدات المتاحة في النظام
+ * 2. جلب قائمة الغرف/الوحدات مع التفاصيل الكاملة (الأسعار، الطاقة الاستيعابية، والمواصفات)
  */
 async function getProperties() {
     try {
+        // يجلب مسار properties/units التفاصيل المتاحة
         const response = await axios.get(`${ZAAER_BASE_URL}/properties`, {
             headers: getHeaders(),
             params: { page: 1, limit: 50 }
         });
 
-        const items = response.data?.result?.items || response.data?.items || [];
+        const items = response.data?.result?.items || response.data?.items || response.data?.data || [];
 
-        // استخراج اسم ووصف/تفاصيل كل غرفة
+        // تمرير التفاصيل الشاملة للغرف حتى يتعرف الذكاء الاصطناعي على مواصفاتها
         return items.map(item => ({
             id: item.id,
-            name: item.name || item.title,
-            type: item.type || 'شقة'
+            unit_name: item.name || item.title || item.unit_number || `شقة ${item.id}`,
+            type: item.type || item.category_name || item.rate_plan || 'شقة فندقية',
+            capacity: item.capacity || item.max_guests || 'حسب نوع الشقة',
+            beds: item.bedrooms_count || item.beds || 'غير محدد',
+            price_per_night: item.base_price || item.rate || item.price || 'يتحدد حسب التواريخ',
+            description: item.description || item.notes || '',
+            status: item.status || 'متاحة'
         }));
     } catch (error) {
         console.error('خطأ أثناء جلب الوحدات من Zaaer:', error.response?.data || error.message);
