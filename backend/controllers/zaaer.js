@@ -149,7 +149,7 @@ async function getReservationQuote(quoteData) {
 // داخل zaaerService.js (أو ملف الـ API الخاص بـ Zaaer)
 async function createReservation(payload) {
     try {
-        const response = await axios.post('https://api.zaaer.com/api/v1/reservations', payload, {
+        const response = await axios.post('https://sahl-suites.zaaer.com/api/v1/reservations', payload, {
             headers: {
                 'Authorization': `Bearer ${process.env.ZAAER_API_TOKEN}`,
                 'Content-Type': 'application/json'
@@ -171,5 +171,5 @@ module.exports = {
     getReservations,
     getProperties,
     getReservationQuote,
-    createReservation // <-- أضفها هنا
+    createReservation 
 };
