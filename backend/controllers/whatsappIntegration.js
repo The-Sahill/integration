@@ -44,6 +44,32 @@ const getReservationQuoteTool = {
     }
 };
 
+// 3. أداة إنشاء وحجز الغرفة فعلياً في النظام
+const createReservationTool = {
+    name: 'createReservation',
+    description: 'إنشاء وتأكيد حجز فعلي في نظام زائر فور اكتمال معلومات العميل، التواريخ، ونوع الوحدة أو الغرفة',
+    parameters: {
+        type: 'OBJECT',
+        properties: {
+            property_id: { type: 'NUMBER', description: 'معرف العقار، الافتراضي 1' },
+            rental_type: { type: 'STRING', description: 'نوع الإيجار مثل daily' },
+            check_in_date: { type: 'STRING', description: 'تاريخ الوصول YYYY-MM-DD' },
+            check_out_date: { type: 'STRING', description: 'تاريخ المغادرة YYYY-MM-DD' },
+            first_name: { type: 'STRING', description: 'اسم الضيف الأول' },
+            last_name: { type: 'STRING', description: 'اسم الضيف الأخير' },
+            phone: { type: 'STRING', description: 'رقم جوال الضيف' },
+            email: { type: 'STRING', description: 'البريد الإلكتروني للضيف' },
+            unit_type_id: { type: 'NUMBER', description: 'معرف نوع الوحدة أو الغرفة' },
+            rate_plan_id: { type: 'NUMBER', description: 'معرف خطة السعر، الافتراضي 25' },
+            unit_count: { type: 'NUMBER', description: 'عدد الوحدات' },
+            adults: { type: 'NUMBER', description: 'عدد البالغين' },
+            children: { type: 'NUMBER', description: 'عدد الأطفال' },
+            coupon_code: { type: 'STRING', description: 'كود الخصم إن وجد' }
+        },
+        required: ['check_in_date', 'check_out_date', 'first_name', 'phone']
+    }
+};
+
 async function sendWhatsAppMessage(recipientID, text) {
     await axios({
         method: 'POST',
@@ -66,11 +92,11 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // 1. إنشاء المحادثة وتزويدها بالأدوات المتاحة
+            // 1. إنشاء المحادثة وتزويدها بالأدوات الثلاث (القراءة، التسعيرة، والحجز الفعلي)
             const chat = ai.chats.create({
                 model: "gemini-3.8-flash",
                 config: {
-                    tools: [{ functionDeclarations: [getReservationsTool, getReservationQuoteTool] }]
+                    tools: [{ functionDeclarations: [getReservationsTool, getReservationQuoteTool, createReservationTool] }]
                 }
             });
 
@@ -78,10 +104,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
             let response = await chat.sendMessage({ message: textPrompt });
 
             // 3. التحقق من وجود Function Call بطريقة آمنة
-            // نتحقق أولاً من وجود functionCalls في الاستجابة
-            const functionCalls = response.functionCalls || response.functionCall ? [response.functionCall || response.functionCalls[0]] : [];
-            
-            // تحقق بديل بناءً على بنية المكتبة الحديثة للاستجابات التي تحتوي على مرشحات أدوات
             const candidates = response.candidates || [];
             let activeCall = null;
 
@@ -153,6 +175,52 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         ]
                     });
                 }
+                // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة
+                else if (callName === 'createReservation') {
+                    console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي في Zaaer API...');
+                    
+                    const reservationPayload = {
+                        property_id: callArgs.property_id || 1,
+                        rental_type: callArgs.rental_type || "daily",
+                        check_in_date: callArgs.check_in_date,
+                        check_out_date: callArgs.check_out_date,
+                        guest: {
+                            first_name: callArgs.first_name || 'زائر',
+                            last_name: callArgs.last_name || 'كريم',
+                            phone: callArgs.phone || '0000000000',
+                            email: callArgs.email || 'guest@example.com'
+                        },
+                        rooms: [
+                            {
+                                unit_type_id: callArgs.unit_type_id || 101,
+                                rate_plan_id: callArgs.rate_plan_id || 25,
+                                unit_count: callArgs.unit_count || 1,
+                                occupancy: {
+                                    adults: callArgs.adults || 1,
+                                    children: callArgs.children || 0,
+                                    infants: 0
+                                }
+                            }
+                        ]
+                    };
+
+                    if (callArgs.coupon_code) {
+                        reservationPayload.coupon = { code: callArgs.coupon_code };
+                    }
+
+                    const bookingResult = await zaaerService.createReservation(reservationPayload);
+
+                    response = await chat.sendMessage({
+                        message: [
+                            {
+                                functionResponse: {
+                                    name: 'createReservation',
+                                    response: { result: bookingResult }
+                                }
+                            }
+                        ]
+                    });
+                }
             }
 
             // استخراج النص النهائي بشكل آمن يتجنب تحذيرات الـ non-text parts
@@ -164,7 +232,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 if (textPart) finalText = textPart.text;
             }
 
-            return finalText || "أهلاً بك، تم تنفيذ طلبك بنجاح. كيف يمكنني مساعدتك بشيء آخر؟";
+            return finalText || "أهلاً بك، تم تنفيذ وإتمام الحجز بنجاح. كيف يمكنني مساعدتك بشيء آخر؟";
 
         } catch (error) {
             console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);

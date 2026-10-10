@@ -140,8 +140,41 @@ async function getReservationQuote(quoteData) {
     }
 }
 
+
+
+/**
+ * 4. إنشاء حجز فعلي مؤكد في النظام
+ * @param {Object} reservationData - بيانات الحجز الكاملة (العميل، الغرف، التواريخ)
+ */
+async function createReservation(reservationData) {
+    try {
+        const response = await axios.post(`${ZAAER_BASE_URL}/reservations`, reservationData, {
+            headers: {
+                ...getHeaders(),
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const result = response.data?.result || response.data || {};
+        console.log('✅ تم إنشاء الحجز الفعلي بنجاح');
+        return {
+            success: true,
+            data: result
+        };
+
+    } catch (error) {
+        console.error('خطأ أثناء إنشاء الحجز في Zaaer:', error.response?.data || error.message);
+        return {
+            success: false,
+            error: error.response?.data || error.message
+        };
+    }
+}
+
+// ولا تنسَ إضافتها في module.exports في نهاية الملف:
 module.exports = {
     getReservations,
     getProperties,
-    getReservationQuote
+    getReservationQuote,
+    createReservation // <-- أضفها هنا
 };
