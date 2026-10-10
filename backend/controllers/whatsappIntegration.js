@@ -25,7 +25,7 @@ const getReservationsTool = {
 // 2. أداة حساب تسعيرة الحجز (Quote)
 const getReservationQuoteTool = {
     name: 'getReservationQuote',
-    description: 'حساب تسعيرة الحجز والخصومات المتاحة بناءً على التواريخ وعدد الأفراد ونوع الشقة أو الكوبون',
+    description: 'حساب تسعيرة الحجز ومعرفة rate_plan_id و unit_type_id الحقيقيين للوحدة قبل التأكيد',
     parameters: {
         type: 'OBJECT',
         properties: {
@@ -47,7 +47,7 @@ const getReservationQuoteTool = {
 // 3. أداة إنشاء وحجز الغرفة فعلياً في النظام
 const createReservationTool = {
     name: 'createReservation',
-    description: 'إنشاء وتأكيد حجز فعلي في نظام زائر فور اكتمال معلومات العميل، التواريخ، ونوع الوحدة أو الغرفة',
+    description: 'إنشاء وتأكيد حجز فعلي في نظام زائر فور اكتمال معلومات العميل وتوفر التواريخ ومعرفات الوحدات',
     parameters: {
         type: 'OBJECT',
         properties: {
@@ -60,8 +60,8 @@ const createReservationTool = {
             name: { type: 'STRING', description: 'اسم الضيف الكامل إذا تم ذكره مرة واحدة' },
             phone: { type: 'STRING', description: 'رقم جوال الضيف' },
             email: { type: 'STRING', description: 'البريد الإلكتروني للضيف' },
-            unit_type_id: { type: 'NUMBER', description: 'معرف نوع الوحدة (unit_type_id) الصحيح في النظام وليس رقم الغرفة' },
-            rate_plan_id: { type: 'NUMBER', description: 'معرف خطة السعر، الافتراضي 25' },
+            unit_type_id: { type: 'NUMBER', description: 'معرف نوع الوحدة الفعلي في النظام (من نتيجة Quote أو العقارات)' },
+            rate_plan_id: { type: 'NUMBER', description: 'معرف خطة السعر الفعلي في النظام' },
             adults: { type: 'NUMBER', description: 'عدد البالغين' },
             children: { type: 'NUMBER', description: 'عدد الأطفال' },
             coupon_code: { type: 'STRING', description: 'كود الخصم إن وجد' }
@@ -92,7 +92,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // 1. إنشاء المحادثة وتزويدها بالأدوات الثلاث
             const chat = ai.chats.create({
                 model: "gemini-3.8-flash",
                 config: {
@@ -100,10 +99,8 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
             });
 
-            // 2. إرسال طلب المستخدم
             let response = await chat.sendMessage({ message: textPrompt });
 
-            // 3. التحقق من وجود Function Call بطريقة آمنة
             const candidates = response.candidates || [];
             let activeCall = null;
 
@@ -118,7 +115,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 const callName = activeCall.name;
                 const callArgs = activeCall.args || {};
 
-                // أ) معالجة استدعاء الحجوزات
                 if (callName === 'getReservations') {
                     console.log('🤖 الـ AI يبحث عن الحجز في Zaaer API...');
                     const searchQuery = callArgs.searchQuery || '';
@@ -135,7 +131,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         ]
                     });
                 } 
-                // ب) معالجة استدعاء تسعيرة الحجز (Quote)
                 else if (callName === 'getReservationQuote') {
                     console.log('🤖 الـ AI يقوم بحساب تسعيرة الحجز في Zaaer API...');
                     
@@ -146,8 +141,8 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         check_out_date: callArgs.check_out_date,
                         rooms: [
                             {
-                                unit_type_id: callArgs.unit_type_id || 1,
-                                rate_plan_id: callArgs.rate_plan_id || 25,
+                                unit_type_id: callArgs.unit_type_id || 101,
+                                rate_plan_id: callArgs.rate_plan_id || 1,
                                 unit_count: callArgs.unit_count || 1,
                                 occupancy: {
                                     adults: callArgs.adults || 1,
@@ -175,7 +170,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         ]
                     });
                 }
-                // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة بالهيكل النهائي الصحيح
                 else if (callName === 'createReservation') {
                     console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي بالهيكل النهائي في Zaaer API...');
                     
@@ -185,6 +179,10 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
 
                     const checkIn = callArgs.check_in_date || "2026-09-01";
                     const checkOut = callArgs.check_out_date || "2026-09-03";
+
+                    // تمرير المعرفات الديناميكية القادمة من الـ AI
+                    const selectedUnitTypeId = callArgs.unit_type_id || 101;
+                    const selectedRatePlanId = callArgs.rate_plan_id || 1;
 
                     const reservationPayload = {
                         property_id: callArgs.property_id || 1,
@@ -211,8 +209,8 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         auto_assign_unit: true,
                         rooms: [
                             {
-                                unit_type_id: callArgs.unit_type_id || 1, // تم ضبطه على 1 كقيمة افتراضية لنوع الوحدة
-                                rate_plan_id: callArgs.rate_plan_id || 25,
+                                unit_type_id: selectedUnitTypeId,
+                                rate_plan_id: selectedRatePlanId,
                                 occupancy: {
                                     adults: callArgs.adults || 2,
                                     children: callArgs.children || 0,
@@ -261,7 +259,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
             }
 
-            // استخراج النص النهائي بشكل آمن يتجنب تحذيرات الـ non-text parts
             let finalText = "";
             if (response.text) {
                 finalText = response.text;
