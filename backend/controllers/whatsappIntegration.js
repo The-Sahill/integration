@@ -192,14 +192,14 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         status: "new",
         booking_payment_method: "pay_at_hotel",
         rental_type: callArgs.rental_type || "daily",
-        currency: "SAR",
+        currency: "JOD",
         check_in_date: callArgs.check_in_date,
         check_out_date: callArgs.check_out_date,
         guest: {
             name: fullName,
             gender: callArgs.gender || "male",
             phone: callArgs.phone || "+966500000000",
-            email: callArgs.email || "guest@example.com",
+            email: callArgs.email || "alsisi@example.com",
             address: callArgs.address || "Riyadh, Saudi Arabia"
         },
         occupancy: {
@@ -211,7 +211,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
         auto_assign_unit: true,
         rooms: [
             {
-                unit_type_id: callArgs.unit_type_id || 101,
+                unit_type_id: callArgs.unit_type_id || 202,
                 rate_plan_id: callArgs.rate_plan_id || 25,
                 occupancy: {
                     adults: callArgs.adults || 2,
