@@ -151,7 +151,7 @@ async function createReservation(payload) {
     try {
         const response = await axios.post('https://api.zaaer.com/api/v1/reservations', payload, {
             headers: {
-                'Authorization': `Bearer ${process.env.ZAAE_API_TOKEN}`,
+                'Authorization': `Bearer ${process.env.ZAAER_API_TOKEN}`,
                 'Content-Type': 'application/json'
             }
         });
