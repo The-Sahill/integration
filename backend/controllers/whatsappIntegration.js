@@ -60,7 +60,7 @@ const createReservationTool = {
             name: { type: 'STRING', description: 'اسم الضيف الكامل إذا تم ذكره مرة واحدة' },
             phone: { type: 'STRING', description: 'رقم جوال الضيف' },
             email: { type: 'STRING', description: 'البريد الإلكتروني للضيف' },
-            unit_type_id: { type: 'NUMBER', description: 'معرف نوع الوحدة أو الغرفة' },
+            unit_type_id: { type: 'NUMBER', description: 'معرف نوع الوحدة (unit_type_id) الصحيح في النظام وليس رقم الغرفة' },
             rate_plan_id: { type: 'NUMBER', description: 'معرف خطة السعر، الافتراضي 25' },
             adults: { type: 'NUMBER', description: 'عدد البالغين' },
             children: { type: 'NUMBER', description: 'عدد الأطفال' },
@@ -146,7 +146,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         check_out_date: callArgs.check_out_date,
                         rooms: [
                             {
-                                unit_type_id: callArgs.unit_type_id || 101,
+                                unit_type_id: callArgs.unit_type_id || 1,
                                 rate_plan_id: callArgs.rate_plan_id || 25,
                                 unit_count: callArgs.unit_count || 1,
                                 occupancy: {
@@ -175,7 +175,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         ]
                     });
                 }
-                // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة مع حقل totals وتفاصيل الـ rooms
+                // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة بالهيكل النهائي الصحيح
                 else if (callName === 'createReservation') {
                     console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي بالهيكل النهائي في Zaaer API...');
                     
@@ -211,7 +211,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         auto_assign_unit: true,
                         rooms: [
                             {
-                                unit_type_id: callArgs.unit_type_id || 202,
+                                unit_type_id: callArgs.unit_type_id || 1, // تم ضبطه على 1 كقيمة افتراضية لنوع الوحدة
                                 rate_plan_id: callArgs.rate_plan_id || 25,
                                 occupancy: {
                                     adults: callArgs.adults || 2,
