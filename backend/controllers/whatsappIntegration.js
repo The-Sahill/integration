@@ -159,13 +159,13 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                     });
                 }
                 else if (callName === 'createReservation') {
-                    console.log('🤖 جاري حساب التسعيرة وجلب المعرفات الحقيقية ثم إتمام الحجز...');
+                    console.log('🤖 الـ AI يقوم بحساب التسعيرة ثم إنشاء الحجز الفعلي في Zaaer...');
 
                     const checkIn = callArgs.check_in_date || "2026-09-01";
                     const checkOut = callArgs.check_out_date || "2026-09-03";
                     const propId = callArgs.property_id || 1;
 
-                    // أ) جلب التسعيرة والمعرفات الحقيقية تلقائياً لمنع أخطاء not_found
+                    // 1. جلب التسعيرة والمعرفات الحقيقية أولاً لضمان عدم وجود أخطاء معرفات
                     const quotePayload = {
                         property_id: propId,
                         rental_type: callArgs.rental_type || "daily",
@@ -204,14 +204,14 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         ? `${callArgs.first_name} ${callArgs.last_name}` 
                         : (callArgs.name || callArgs.first_name || 'زائر كريم');
 
-                    // ب) بناء الـ Payload المكتمل بالبيانات الحقيقية
+                    // 2. بناء حمولة الحجز الفعلية
                     const reservationPayload = {
                         property_id: propId,
                         booking_id: `WEB-${Math.floor(Math.random() * 9000) + 1000}`,
                         status: "new",
                         booking_payment_method: "pay_at_hotel",
                         rental_type: callArgs.rental_type || "daily",
-                        currency: callArgs.currency || "SAR",
+                        currency: "SAR",
                         check_in_date: checkIn,
                         check_out_date: checkOut,
                         guest: {
@@ -242,10 +242,11 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                         reservationPayload.coupon = quoteData.coupon || { code: callArgs.coupon_code };
                     }
 
-                    // ج) تنفيذ الحجز في API زائر
+                    // 3. إرسال الطلب الفعلي لسيستم زائر
                     const bookingResult = await zaaerService.createReservation(reservationPayload);
-                    console.log('📦 النتيجة القادمة من Zaaer API عند الحجز:', JSON.stringify(bookingResult, null, 2));
+                    console.log('📦 النتيجة الحقيقية القادمة من Zaaer API عند الحجز:', JSON.stringify(bookingResult, null, 2));
 
+                    // 4. تمرير النتيجة الفعلية للـ AI ليرد على العميل بناءً على نجاح أو فشل الـ API حقاً
                     response = await chat.sendMessage({
                         message: [{
                             functionResponse: {
