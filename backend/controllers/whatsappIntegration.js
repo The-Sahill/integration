@@ -394,7 +394,7 @@ async function executeTool(name, args) {
         'property_id'
       );
       const quotePayload = {
-        property_id: propertyId,
+        property_id: propertyId || 1 ,
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
