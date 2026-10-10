@@ -114,31 +114,48 @@ async function getProperties() {
  * 3. حساب تسعيرة الحجز (Quote) بناءً على تفاصيل الغرف، التواريخ، والخصومات
  * @param {Object} quoteData - بيانات طلب التسعيرة (التواريخ، الغرف، الكوبون، إلخ)
  */
+
 async function getReservationQuote(quoteData) {
     try {
-        const response = await axios.post(`${ZAAER_BASE_URL}/reservations/quote`, quoteData, {
-            headers: {
-                ...getHeaders(),
-                'Content-Type': 'application/json',
-            }
-        });
+        console.log(
+            '📤 Quote request payload:',
+            JSON.stringify(quoteData, null, 2)
+        );
 
-        const quoteResult = response.data?.result || response.data || {};
-        
+        const response = await axios.post(
+            `${ZAAER_BASE_URL}/reservations/quote`,
+            quoteData,
+            {
+                headers: {
+                    ...getHeaders(),
+                    'Content-Type': 'application/json',
+                }
+            }
+        );
+
+        const quoteResult =
+            response.data?.result || response.data || {};
+
         console.log('✅ تم جلب تسعيرة الحجز بنجاح');
+
         return {
             success: true,
             data: quoteResult
         };
 
     } catch (error) {
-        console.error('خطأ أثناء جلب تسعيرة الحجز من Zaaer:', error.response?.data || error.message);
+        console.error(
+            '❌ خطأ أثناء جلب تسعيرة الحجز من Zaaer:',
+            error.response?.data || error.message
+        );
+
         return {
             success: false,
             error: error.response?.data || error.message
         };
     }
 }
+
 
 
 

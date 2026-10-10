@@ -84,11 +84,12 @@ const getReservationQuoteTool = {
       },
     },
     required: [
-      'check_in_date',
-      'check_out_date',
-      'unit_type_id',
-      'rate_plan_id',
-    ],
+        'property_id',
+        'check_in_date',
+        'check_out_date',
+        'unit_type_id',
+        'rate_plan_id',
+      ],
   },
 };
 
@@ -115,12 +116,13 @@ const createReservationTool = {
       coupon_code: { type: 'STRING' },
     },
     required: [
-      'check_in_date',
-      'check_out_date',
-      'phone',
-      'unit_type_id',
-      'rate_plan_id',
-    ],
+        'property_id',
+        'check_in_date',
+        'check_out_date',
+        'phone',
+        'unit_type_id',
+        'rate_plan_id',
+      ],
   },
 };
 
@@ -387,9 +389,12 @@ async function executeTool(name, args) {
       if (!Number.isInteger(children) || children < 0) {
         throw new Error('عدد الأطفال غير صحيح');
       }
-
+      const propertyId = requiredPositiveNumber(
+        args.property_id,
+        'property_id'
+      );
       const quotePayload = {
-        property_id: args.property_id,
+        property_id: propertyId,
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
