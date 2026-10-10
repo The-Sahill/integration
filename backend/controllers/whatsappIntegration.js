@@ -177,15 +177,13 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
                 // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة بالهيكل النهائي الصحيح
           // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة بالهيكل النهائي الصحيح
-          else if (callName === 'createReservation') {
+        // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة بالهيكل النهائي الصحيح
+        else if (callName === 'createReservation') {
             console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي بالهيكل النهائي في Zaaer API...');
             
             const fullName = callArgs.first_name && callArgs.last_name 
                 ? `${callArgs.first_name} ${callArgs.last_name}` 
                 : (callArgs.name || callArgs.first_name || 'زائر كريم');
-
-            const checkIn = callArgs.check_in_date || "2026-09-01";
-            const checkOut = callArgs.check_out_date || "2026-09-03";
 
             const reservationPayload = {
                 property_id: callArgs.property_id || 1,
@@ -193,14 +191,14 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 status: "new",
                 booking_payment_method: "pay_at_hotel",
                 rental_type: callArgs.rental_type || "daily",
-                currency: "JOD",
-                check_in_date: checkIn,
-                check_out_date: checkOut,
+                currency: "SAR",
+                check_in_date: callArgs.check_in_date,
+                check_out_date: callArgs.check_out_date,
                 guest: {
                     name: fullName,
                     gender: callArgs.gender || "male",
                     phone: callArgs.phone || "+966500000000",
-                    email: callArgs.email || "alsisi@example.com",
+                    email: callArgs.email || "guest@example.com",
                     address: callArgs.address || "Riyadh, Saudi Arabia"
                 },
                 occupancy: {
@@ -212,32 +210,15 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 auto_assign_unit: true,
                 rooms: [
                     {
-                        unit_type_id: callArgs.unit_type_id || 202,
+                        unit_type_id: callArgs.unit_type_id || 101,
                         rate_plan_id: callArgs.rate_plan_id || 25,
                         occupancy: {
                             adults: callArgs.adults || 2,
                             children: callArgs.children || 0,
                             infants: 0
-                        },
-                        amount: 800,
-                        daily_rates: [
-                            {
-                                date: checkIn,
-                                unit_price: 400
-                            },
-                            {
-                                date: checkOut,
-                                unit_price: 400
-                            }
-                        ]
+                        }
                     }
-                ],
-                totals: {
-                    room_charges: 800,
-                    additional_charges: 0,
-                    discount: 0,
-                    total: 800
-                }
+                ]
             };
 
             if (callArgs.coupon_code) {
@@ -247,7 +228,6 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
             }
 
             const bookingResult = await zaaerService.createReservation(reservationPayload);
-            console.log('📦 النتيجة القادمة من Zaaer API عند الحجز:', JSON.stringify(bookingResult, null, 2));
 
             response = await chat.sendMessage({
                 message: [
