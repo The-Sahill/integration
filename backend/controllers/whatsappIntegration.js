@@ -77,14 +77,29 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
             // 2. إرسال طلب المستخدم
             let response = await chat.sendMessage({ message: textPrompt });
 
-            // 3. التحقق من وجود Function Call
+            // 3. التحقق من وجود Function Call بطريقة آمنة
+            // نتحقق أولاً من وجود functionCalls في الاستجابة
+            const functionCalls = response.functionCalls || response.functionCall ? [response.functionCall || response.functionCalls[0]] : [];
+            
+            // تحقق بديل بناءً على بنية المكتبة الحديثة للاستجابات التي تحتوي على مرشحات أدوات
+            const candidates = response.candidates || [];
+            let activeCall = null;
+
             if (response.functionCalls && response.functionCalls.length > 0) {
-                const call = response.functionCalls[0];
+                activeCall = response.functionCalls[0];
+            } else if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
+                const part = candidates[0].content.parts.find(p => p.functionCall);
+                if (part) activeCall = part.functionCall;
+            }
+
+            if (activeCall) {
+                const callName = activeCall.name;
+                const callArgs = activeCall.args || {};
 
                 // أ) معالجة استدعاء الحجوزات
-                if (call.name === 'getReservations') {
+                if (callName === 'getReservations') {
                     console.log('🤖 الـ AI يبحث عن الحجز في Zaaer API...');
-                    const searchQuery = call.args?.searchQuery || '';
+                    const searchQuery = callArgs.searchQuery || '';
                     const reservations = await zaaerService.getReservations(searchQuery);
 
                     response = await chat.sendMessage({
@@ -99,33 +114,30 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                     });
                 } 
                 // ب) معالجة استدعاء تسعيرة الحجز (Quote)
-                else if (call.name === 'getReservationQuote') {
+                else if (callName === 'getReservationQuote') {
                     console.log('🤖 الـ AI يقوم بحساب تسعيرة الحجز في Zaaer API...');
-                    const args = call.args || {};
-
-                    // تجهيز البنية المطلوبة لـ API زائر
+                    
                     const quotePayload = {
-                        property_id: args.property_id || 1,
-                        rental_type: args.rental_type || "daily",
-                        check_in_date: args.check_in_date,
-                        check_out_date: args.check_out_date,
+                        property_id: callArgs.property_id || 1,
+                        rental_type: callArgs.rental_type || "daily",
+                        check_in_date: callArgs.check_in_date,
+                        check_out_date: callArgs.check_out_date,
                         rooms: [
                             {
-                                unit_type_id: args.unit_type_id || 101,
-                                rate_plan_id: args.rate_plan_id || 25,
-                                unit_count: args.unit_count || 1,
+                                unit_type_id: callArgs.unit_type_id || 101,
+                                rate_plan_id: callArgs.rate_plan_id || 25,
+                                unit_count: callArgs.unit_count || 1,
                                 occupancy: {
-                                    adults: args.adults || 1,
-                                    children: args.children || 0,
+                                    adults: callArgs.adults || 1,
+                                    children: callArgs.children || 0,
                                     infants: 0
                                 }
                             }
                         ]
                     };
 
-                    // إضافة الكوبون إذا قام العميل بتقديمه
-                    if (args.coupon_code) {
-                        quotePayload.coupon = { code: args.coupon_code };
+                    if (callArgs.coupon_code) {
+                        quotePayload.coupon = { code: callArgs.coupon_code };
                     }
 
                     const quoteResult = await zaaerService.getReservationQuote(quotePayload);
@@ -143,8 +155,16 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                 }
             }
 
-            // إرجاع النص النهائي للمستخدم
-            return response.text || "أهلاً بك، كيف يمكنني مساعدتك اليوم؟";
+            // استخراج النص النهائي بشكل آمن يتجنب تحذيرات الـ non-text parts
+            let finalText = "";
+            if (response.text) {
+                finalText = response.text;
+            } else if (response.candidates && response.candidates[0]?.content?.parts) {
+                const textPart = response.candidates[0].content.parts.find(p => p.text);
+                if (textPart) finalText = textPart.text;
+            }
+
+            return finalText || "أهلاً بك، تم تنفيذ طلبك بنجاح. كيف يمكنني مساعدتك بشيء آخر؟";
 
         } catch (error) {
             console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);
