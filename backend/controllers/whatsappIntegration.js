@@ -101,103 +101,124 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
 
             let response = await chat.sendMessage({ message: textPrompt });
 
+            // 1. استخراج Function Call إن وجد بدون استدعاء response.text مباشرة
             const candidates = response.candidates || [];
             let activeCall = null;
 
             if (response.functionCalls && response.functionCalls.length > 0) {
                 activeCall = response.functionCalls[0];
-            } else if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
+            } else if (candidates.length > 0 && candidates[0]?.content?.parts) {
                 const part = candidates[0].content.parts.find(p => p.functionCall);
                 if (part) activeCall = part.functionCall;
             }
 
+            // 2. إذا وجد استدعاء أداة
             if (activeCall) {
                 const callName = activeCall.name;
                 const callArgs = activeCall.args || {};
 
                 if (callName === 'getReservations') {
-                    console.log('🤖 الـ AI يبحث عن الحجز في Zaaer API...');
+                    console.log('🤖 الـ AI يبحث عن الحجز...');
                     const searchQuery = callArgs.searchQuery || '';
                     const reservations = await zaaerService.getReservations(searchQuery);
 
                     response = await chat.sendMessage({
-                        message: [
-                            {
-                                functionResponse: {
-                                    name: 'getReservations',
-                                    response: { result: reservations }
-                                }
+                        message: [{
+                            functionResponse: {
+                                name: 'getReservations',
+                                response: { result: reservations }
                             }
-                        ]
+                        }]
                     });
                 } 
                 else if (callName === 'getReservationQuote') {
-                    console.log('🤖 الـ AI يقوم بحساب تسعيرة الحجز في Zaaer API...');
-                    
+                    console.log('🤖 الـ AI يحسب التسعيرة...');
                     const quotePayload = {
                         property_id: callArgs.property_id || 1,
                         rental_type: callArgs.rental_type || "daily",
                         check_in_date: callArgs.check_in_date,
                         check_out_date: callArgs.check_out_date,
-                        rooms: [
-                            {
-                                unit_type_id: callArgs.unit_type_id || 101,
-                                rate_plan_id: callArgs.rate_plan_id || 1,
-                                unit_count: callArgs.unit_count || 1,
-                                occupancy: {
-                                    adults: callArgs.adults || 1,
-                                    children: callArgs.children || 0,
-                                    infants: 0
-                                }
-                            }
-                        ]
+                        rooms: [{
+                            unit_type_id: callArgs.unit_type_id || 101,
+                            rate_plan_id: callArgs.rate_plan_id || 25,
+                            unit_count: 1,
+                            occupancy: { adults: callArgs.adults || 1, children: 0, infants: 0 }
+                        }]
                     };
-
-                    if (callArgs.coupon_code) {
-                        quotePayload.coupon = { code: callArgs.coupon_code };
-                    }
-
+                    if (callArgs.coupon_code) quotePayload.coupon = { code: callArgs.coupon_code };
+                    
                     const quoteResult = await zaaerService.getReservationQuote(quotePayload);
 
                     response = await chat.sendMessage({
-                        message: [
-                            {
-                                functionResponse: {
-                                    name: 'getReservationQuote',
-                                    response: { result: quoteResult }
-                                }
+                        message: [{
+                            functionResponse: {
+                                name: 'getReservationQuote',
+                                response: { result: quoteResult }
                             }
-                        ]
+                        }]
                     });
                 }
                 else if (callName === 'createReservation') {
-                    console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي بالهيكل النهائي في Zaaer API...');
-                    
+                    console.log('🤖 جاري حساب التسعيرة وجلب المعرفات الحقيقية ثم إتمام الحجز...');
+
+                    const checkIn = callArgs.check_in_date || "2026-09-01";
+                    const checkOut = callArgs.check_out_date || "2026-09-03";
+                    const propId = callArgs.property_id || 1;
+
+                    // أ) جلب التسعيرة والمعرفات الحقيقية تلقائياً لمنع أخطاء not_found
+                    const quotePayload = {
+                        property_id: propId,
+                        rental_type: callArgs.rental_type || "daily",
+                        check_in_date: checkIn,
+                        check_out_date: checkOut,
+                        rooms: [{
+                            unit_type_id: callArgs.unit_type_id || 101,
+                            rate_plan_id: callArgs.rate_plan_id || 25,
+                            unit_count: 1,
+                            occupancy: { adults: callArgs.adults || 2, children: 0, infants: 0 }
+                        }]
+                    };
+
+                    if (callArgs.coupon_code) quotePayload.coupon = { code: callArgs.coupon_code };
+
+                    const quoteRes = await zaaerService.getReservationQuote(quotePayload);
+                    const quoteData = quoteRes?.data || quoteRes?.result || quoteRes || {};
+
+                    const realRoom = quoteData.rooms?.[0] || {};
+                    const realUnitTypeId = realRoom.unit_type_id || callArgs.unit_type_id || 101;
+                    const realRatePlanId = realRoom.rate_plan_id || callArgs.rate_plan_id || 25;
+                    const roomAmount = realRoom.amount || 800;
+                    const dailyRates = realRoom.daily_rates || [
+                        { date: checkIn, unit_price: 400 },
+                        { date: checkOut, unit_price: 400 }
+                    ];
+
+                    const totalsData = quoteData.totals || {
+                        room_charges: roomAmount,
+                        additional_charges: 0,
+                        discount: quoteData.coupon?.discount_value || 0,
+                        total: roomAmount - (quoteData.coupon?.discount_value || 0)
+                    };
+
                     const fullName = callArgs.first_name && callArgs.last_name 
                         ? `${callArgs.first_name} ${callArgs.last_name}` 
                         : (callArgs.name || callArgs.first_name || 'زائر كريم');
 
-                    const checkIn = callArgs.check_in_date || "2026-09-01";
-                    const checkOut = callArgs.check_out_date || "2026-09-03";
-
-                    // تمرير المعرفات الديناميكية القادمة من الـ AI
-                    const selectedUnitTypeId = callArgs.unit_type_id || 101;
-                    const selectedRatePlanId = callArgs.rate_plan_id || 1;
-
+                    // ب) بناء الـ Payload المكتمل بالبيانات الحقيقية
                     const reservationPayload = {
-                        property_id: callArgs.property_id || 1,
+                        property_id: propId,
                         booking_id: `WEB-${Math.floor(Math.random() * 9000) + 1000}`,
                         status: "new",
                         booking_payment_method: "pay_at_hotel",
                         rental_type: callArgs.rental_type || "daily",
-                        currency: "JOD",
+                        currency: callArgs.currency || "SAR",
                         check_in_date: checkIn,
                         check_out_date: checkOut,
                         guest: {
                             name: fullName,
                             gender: callArgs.gender || "male",
                             phone: callArgs.phone || "+966500000000",
-                            email: callArgs.email || "alsisi@example.com",
+                            email: callArgs.email || "guest@example.com",
                             address: callArgs.address || "Riyadh, Saudi Arabia"
                         },
                         occupancy: {
@@ -205,69 +226,49 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                             children: callArgs.children || 0,
                             infants: 0
                         },
-                        special_requests: callArgs.special_requests || "عبر محادثات الواتساب",
+                        special_requests: callArgs.special_requests || "حجز عبر الواتساب",
                         auto_assign_unit: true,
-                        rooms: [
-                            {
-                                unit_type_id: selectedUnitTypeId,
-                                rate_plan_id: selectedRatePlanId,
-                                occupancy: {
-                                    adults: callArgs.adults || 2,
-                                    children: callArgs.children || 0,
-                                    infants: 0
-                                },
-                                amount: 800,
-                                daily_rates: [
-                                    {
-                                        date: checkIn,
-                                        unit_price: 400
-                                    },
-                                    {
-                                        date: checkOut,
-                                        unit_price: 400
-                                    }
-                                ]
-                            }
-                        ],
-                        totals: {
-                            room_charges: 800,
-                            additional_charges: 0,
-                            discount: 0,
-                            total: 800
-                        }
+                        rooms: [{
+                            unit_type_id: realUnitTypeId,
+                            rate_plan_id: realRatePlanId,
+                            occupancy: { adults: callArgs.adults || 2, children: 0, infants: 0 },
+                            amount: roomAmount,
+                            daily_rates: dailyRates
+                        }],
+                        totals: totalsData
                     };
 
                     if (callArgs.coupon_code) {
-                        reservationPayload.coupon = {
-                            code: callArgs.coupon_code
-                        };
+                        reservationPayload.coupon = quoteData.coupon || { code: callArgs.coupon_code };
                     }
 
+                    // ج) تنفيذ الحجز في API زائر
                     const bookingResult = await zaaerService.createReservation(reservationPayload);
                     console.log('📦 النتيجة القادمة من Zaaer API عند الحجز:', JSON.stringify(bookingResult, null, 2));
 
                     response = await chat.sendMessage({
-                        message: [
-                            {
-                                functionResponse: {
-                                    name: 'createReservation',
-                                    response: { result: bookingResult }
-                                }
+                        message: [{
+                            functionResponse: {
+                                name: 'createReservation',
+                                response: { result: bookingResult }
                             }
-                        ]
+                        }]
                     });
                 }
             }
 
+            // 3. آليات استخراج النص الصافي بامان لتفادي التنبيهات
             let finalText = "";
-            if (response.text) {
-                finalText = response.text;
-            } else if (response.candidates && response.candidates[0]?.content?.parts) {
-                const textPart = response.candidates[0].content.parts.find(p => p.text);
+            if (candidates[0]?.content?.parts) {
+                const textPart = candidates[0].content.parts.find(p => p.text);
                 if (textPart) finalText = textPart.text;
             }
+            
+            if (!finalText && response.text) {
+                finalText = response.text;
+            }
 
-            return finalText || "أهلاً بك، تم تنفيذ وإتمام الحجز بنجاح. كيف يمكنني مساعدتك بشيء آخر؟";
+            return finalText || "تمت العملية بنجاح. هل يمكنني مساعدتك بشيء آخر؟";
 
         } catch (error) {
             console.warn(`المحاولة رقم ${attempt} فشلت:`, error.message);
