@@ -11,15 +11,8 @@ const getHeaders = () => ({
 });
 
 /**
- * 1. جلب قائمة الحجوزات مع الحقول ذات الصلة بالتوفر
+ * 1. جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
  */
-// في ملف services/zaaerService.js// services/zaaerService.js
-
-/**
- * جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
- */
-// services/zaaerService.js
-
 async function getReservations() {
     try {
         let allReservations = [];
@@ -27,7 +20,7 @@ async function getReservations() {
         let hasMorePages = true;
         const limitPerPage = 100;
 
-        // 1. جلب كافة الصفحات من النظام
+        // جلب كافة الصفحات من النظام
         while (hasMorePages) {
             const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
                 headers: getHeaders(),
@@ -52,10 +45,10 @@ async function getReservations() {
             currentPage++;
         }
 
-        // 2. قائمة الحالات المطلوب عرضها فقط (تجاهل الملغاة والمغادرة)
+        // قائمة الحالات المطلوب عرضها فقط (تجاهل الملغاة والمغادرة)
         const activeStatuses = ['confirmed', 'unconfirmed', 'checked_in'];
 
-        // 3. فلترة البيانات وتنسيقها
+        // فلترة البيانات وتنسيقها
         const filteredReservations = allReservations
             .filter(item => {
                 const currentStatus = item.reservation_status || item.status || '';
@@ -86,12 +79,13 @@ async function getReservations() {
         return [];
     }
 }
+
 /**
  * 2. جلب قائمة الغرف/الوحدات مع التفاصيل الكاملة (الأسعار، الطاقة الاستيعابية، والمواصفات)
  */
 async function getProperties() {
     try {
-        // يجلب مسار properties/units التفاصيل المتاحة
+        // يجلب مسار properties التفاصيل المتاحة
         const response = await axios.get(`${ZAAER_BASE_URL}/properties`, {
             headers: getHeaders(),
             params: { page: 1, limit: 50 }
@@ -103,7 +97,7 @@ async function getProperties() {
         return items.map(item => ({
             id: item.id,
             unit_name: item.name || item.title || item.unit_number || `شقة ${item.id}`,
-            type: item.type || item.category_name || item.rate_plan ||  item.unit_type_name || 'غير محدد',
+            type: item.type || item.category_name || item.rate_plan || item.unit_type_name || 'غير محدد',
             capacity: item.capacity || item.max_guests || 'حسب نوع الشقة',
             beds: item.bedrooms_count || item.beds || 'غير محدد',
             price_per_night: item.base_price || item.rate || item.price || 'يتحدد حسب التواريخ',
@@ -116,7 +110,38 @@ async function getProperties() {
     }
 }
 
+/**
+ * 3. حساب تسعيرة الحجز (Quote) بناءً على تفاصيل الغرف، التواريخ، والخصومات
+ * @param {Object} quoteData - بيانات طلب التسعيرة (التواريخ، الغرف، الكوبون، إلخ)
+ */
+async function getReservationQuote(quoteData) {
+    try {
+        const response = await axios.post(`${ZAAER_BASE_URL}/reservations/quote`, quoteData, {
+            headers: {
+                ...getHeaders(),
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const quoteResult = response.data?.result || response.data || {};
+        
+        console.log('✅ تم جلب تسعيرة الحجز بنجاح');
+        return {
+            success: true,
+            data: quoteResult
+        };
+
+    } catch (error) {
+        console.error('خطأ أثناء جلب تسعيرة الحجز من Zaaer:', error.response?.data || error.message);
+        return {
+            success: false,
+            error: error.response?.data || error.message
+        };
+    }
+}
+
 module.exports = {
     getReservations,
-    getProperties
+    getProperties,
+    getReservationQuote
 };
