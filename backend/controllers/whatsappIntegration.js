@@ -176,52 +176,54 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                     });
                 }
                 // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة
-                else if (callName === 'createReservation') {
-                    console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي في Zaaer API...');
-                    
-                    const reservationPayload = {
-                        property_id: callArgs.property_id || 1,
-                        rental_type: callArgs.rental_type || "daily",
-                        status: "new", // <-- أضفنا هذا السطر هنا لحل المشكلة
-                        check_in_date: callArgs.check_in_date,
-                        check_out_date: callArgs.check_out_date,
-                        guest: {
-                            first_name: callArgs.first_name || 'زائر',
-                            last_name: callArgs.last_name || 'كريم',
-                            phone: callArgs.phone || '0000000000',
-                            email: callArgs.email || 'guest@example.com'
-                        },
-                        rooms: [
-                            {
-                                unit_type_id: callArgs.unit_type_id || 101,
-                                rate_plan_id: callArgs.rate_plan_id || 25,
-                                unit_count: callArgs.unit_count || 1,
-                                occupancy: {
-                                    adults: callArgs.adults || 1,
-                                    children: callArgs.children || 0,
-                                    infants: 0
-                                }
+            // ج) معالجة إنشاء الحجز الفعلي وتأكيده مباشرة
+            else if (callName === 'createReservation') {
+                console.log('🤖 الـ AI يقوم بإنشاء وتأكيد الحجز الفعلي في Zaaer API...');
+                
+                const reservationPayload = {
+                    booking_id: callArgs.booking_id || `BK-${Math.floor(Math.random() * 90000) + 10000}`, // <-- أضفنا حقل booking_id هنا
+                    property_id: callArgs.property_id || 1,
+                    rental_type: callArgs.rental_type || "daily",
+                    status: "new",
+                    check_in_date: callArgs.check_in_date,
+                    check_out_date: callArgs.check_out_date,
+                    guest: {
+                        first_name: callArgs.first_name || 'زائر',
+                        last_name: callArgs.last_name || 'كريم',
+                        phone: callArgs.phone || '0000000000',
+                        email: callArgs.email || 'guest@example.com'
+                    },
+                    rooms: [
+                        {
+                            unit_type_id: callArgs.unit_type_id || 101,
+                            rate_plan_id: callArgs.rate_plan_id || 25,
+                            unit_count: callArgs.unit_count || 1,
+                            occupancy: {
+                                adults: callArgs.adults || 1,
+                                children: callArgs.children || 0,
+                                infants: 0
                             }
-                        ]
-                    };
+                        }
+                    ]
+                };
 
-                    if (callArgs.coupon_code) {
-                        reservationPayload.coupon = { code: callArgs.coupon_code };
-                    }
-
-                    const bookingResult = await zaaerService.createReservation(reservationPayload);
-
-                    response = await chat.sendMessage({
-                        message: [
-                            {
-                                functionResponse: {
-                                    name: 'createReservation',
-                                    response: { result: bookingResult }
-                                }
-                            }
-                        ]
-                    });
+                if (callArgs.coupon_code) {
+                    reservationPayload.coupon = { code: callArgs.coupon_code };
                 }
+
+                const bookingResult = await zaaerService.createReservation(reservationPayload);
+
+                response = await chat.sendMessage({
+                    message: [
+                        {
+                            functionResponse: {
+                                name: 'createReservation',
+                                response: { result: bookingResult }
+                            }
+                        }
+                    ]
+                });
+            }
             }
 
             // استخراج النص النهائي بشكل آمن يتجنب تحذيرات الـ non-text parts
