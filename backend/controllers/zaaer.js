@@ -146,28 +146,23 @@ async function getReservationQuote(quoteData) {
  * 4. إنشاء حجز فعلي مؤكد في النظام
  * @param {Object} reservationData - بيانات الحجز الكاملة (العميل، الغرف، التواريخ)
  */
-async function createReservation(reservationData) {
+// داخل zaaerService.js (أو ملف الـ API الخاص بـ Zaaer)
+async function createReservation(payload) {
     try {
-        const response = await axios.post(`${ZAAER_BASE_URL}/reservations`, reservationData, {
+        const response = await axios.post('https://api.zaaer.com/api/v1/reservations', payload, {
             headers: {
-                ...getHeaders(),
-                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.ZAAE_API_TOKEN}`,
+                'Content-Type': 'application/json'
             }
         });
-
-        const result = response.data?.result || response.data || {};
-        console.log('✅ تم إنشاء الحجز الفعلي بنجاح');
-        return {
-            success: true,
-            data: result
-        };
-
+        return response.data;
     } catch (error) {
-        console.error('خطأ أثناء إنشاء الحجز في Zaaer:', error.response?.data || error.message);
-        return {
-            success: false,
-            error: error.response?.data || error.message
-        };
+        // هذا السطر سيلتقط رسالة الخطأ الحقيقية من زائر (حتى لو كانت 409 أو 404 أو 422)
+        if (error.response && error.response.data) {
+            console.error('❌ خطأ تفصيلي من Zaaer API:', JSON.stringify(error.response.data, null, 2));
+            return error.response.data; // إرجاع كائن الخطأ للـ AI ليقرأه ويعرف السبب
+        }
+        throw error;
     }
 }
 
