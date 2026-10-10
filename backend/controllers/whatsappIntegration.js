@@ -182,6 +182,7 @@ async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
                     const reservationPayload = {
                         property_id: callArgs.property_id || 1,
                         rental_type: callArgs.rental_type || "daily",
+                        status: "new", // <-- أضفنا هذا السطر هنا لحل المشكلة
                         check_in_date: callArgs.check_in_date,
                         check_out_date: callArgs.check_out_date,
                         guest: {
