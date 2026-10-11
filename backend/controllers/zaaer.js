@@ -57,17 +57,49 @@ async function getReservations() {
             .map(item => {
                 const primaryRoom = Array.isArray(item.rooms) && item.rooms.length > 0 ? item.rooms[0] : {};
 
-                return {
-                    id: item.id,
-                    reservation_number: item.number,
-                    guest_name: item.guest?.name || 'غير محدد',
-                    unit_name: primaryRoom.unit_name || item.unit_name || 'غير محدد',
-                    unit_type_name: primaryRoom.unit_type_name || 'غير محدد',
-                    check_in_date: item.check_in_date,
-                    check_out_date: item.check_out_date,
-                    // ترجمة حالة الحجز ليفهمها الـ AI والمستخدم بوضوح
-                    status: item.reservation_status === 'checked_in' ? 'مقيم حالياً' : 'مؤكد / بانتظار الوصول'
-                };
+              
+return {
+    id: item.id,
+    reservation_number: item.number,
+  
+    property_id: item.property_id ?? null,
+  
+    guest_name: item.guest?.name || 'غير محدد',
+  
+    unit_name:
+      primaryRoom.unit_name ||
+      item.unit_name ||
+      'غير محدد',
+  
+    unit_type_id:
+      primaryRoom.unit_type_id ??
+      item.unit_type_id ??
+      null,
+  
+    unit_type_name:
+      primaryRoom.unit_type_name ||
+      item.unit_type_name ||
+      'غير محدد',
+  
+    rate_plan_id:
+      primaryRoom.rate_plan_id ??
+      item.rate_plan_id ??
+      null,
+  
+    rate_plan_name:
+      primaryRoom.rate_plan_name ||
+      item.rate_plan_name ||
+      'غير محدد',
+  
+    check_in_date: item.check_in_date,
+    check_out_date: item.check_out_date,
+  
+    status:
+      (item.reservation_status || item.status) === 'checked_in'
+        ? 'مقيم حالياً'
+        : 'مؤكد / بانتظار الوصول',
+  };
+  
             });
 
         console.log(`📊 إجمالي الحجوزات النشطة والمستقبلية: ${filteredReservations.length} من أصل ${allReservations.length}`);
