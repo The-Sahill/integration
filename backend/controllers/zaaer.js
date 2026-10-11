@@ -85,7 +85,6 @@ async function getReservations() {
   try {
     const reservations = await getAllPages("/reservations");
 
-    console.log(`📊 إجمالي الحجوزات المسترجعة: ${reservations.length}`);
 
     return reservations;
   } catch (error) {
@@ -104,7 +103,6 @@ async function getProperties() {
   try {
     const properties = await getAllPages("/properties");
 
-    console.log(`🏠 إجمالي العناصر المسترجعة من properties: ${properties.length}`);
 
     return properties;
   } catch (error) {
@@ -131,7 +129,6 @@ async function getReservationQuote(quoteData) {
       }
     );
 
-    console.log("✅ Quote response status:", response.status);
 
     return {
       success: true,
