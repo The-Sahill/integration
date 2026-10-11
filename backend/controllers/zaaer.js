@@ -1,209 +1,230 @@
-// services/zaaerService.js
-const axios = require('axios');
 
-const ZAAER_BASE_URL ='https://sahl-suites.zaaer.com/api/v1';
-const ZAAER_TOKEN ='1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea';
+const axios = require("axios");
 
-// إعداد الترويسات الموحدة
+const ZAAER_BASE_URL =
+  process.env.ZAAER_BASE_URL || "https://sahl-suites.zaaer.com/api/v1";
+
+const ZAAER_TOKEN = "1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea";
+
+// إعدادات الاتصال الموحدة
 const getHeaders = () => {
-    if (
-      typeof ZAAER_TOKEN !== 'string' ||
-      !ZAAER_TOKEN.trim()
-    ) {
-      throw new Error('ZAAER_TOKEN is missing or empty');
-    }
-  
-    return {
-      Authorization: `Bearer ${ZAAER_TOKEN.trim()}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    };
+  if (!ZAAER_TOKEN || !ZAAER_TOKEN.trim()) {
+    throw new Error("ZAAER_API_TOKEN is missing or empty");
+  }
+
+  return {
+    Authorization: `Bearer ${ZAAER_TOKEN.trim()}`,
+    Accept: "application/json",
+    "Content-Type": "application/json",
   };
+};
 
-/**
- * 1. جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
- */
-async function getReservations() {
-    try {
-      let allReservations = [];
-      let currentPage = 1;
-      let hasMorePages = true;
-      const limitPerPage = 100;
-  
-      // جلب جميع صفحات الحجوزات من Zaaer
-      while (hasMorePages) {
-        const response = await axios.get(
-          `${ZAAER_BASE_URL}/reservations`,
-          {
-            headers: getHeaders(),
-            params: {
-              page: currentPage,
-              limit: limitPerPage,
-            },
-          }
-        );
-  
-        const items =
-          response.data?.result?.items ??
-          response.data?.items ??
-          [];
-  
-        if (!Array.isArray(items) || items.length === 0) {
-          hasMorePages = false;
-          break;
-        }
-  
-        // الاحتفاظ بجميع الحقول الأصلية لكل حجز
-        allReservations.push(...items);
-  
-        const meta =
-          response.data?.result?.meta ??
-          response.data?.meta;
-  
-        if (meta?.last_page != null) {
-          hasMorePages = currentPage < meta.last_page;
-        } else {
-          hasMorePages = items.length === limitPerPage;
-        }
-  
-        currentPage++;
-      }
-  
-      // إرجاع جميع الحجوزات دون تحديد حقول معينة
-      const allReservationsData = allReservations.map(
-        (item) => ({ ...item })
-      );
-  
-      console.log(
-        `📊 إجمالي الحجوزات المسترجعة: ${allReservationsData.length}`
-      );
-  
-      return allReservationsData;
-  
-    } catch (error) {
-      console.error(
-        '❌ خطأ أثناء جلب الحجوزات من Zaaer:',
-        {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        }
-      );
-  
-      return [];
-    }
-  }
-  
+// استخراج العناصر من أشكال الاستجابة المحتملة
+function extractItems(responseData) {
+  const candidates = [
+    responseData?.result?.items,
+    responseData?.items,
+    responseData?.data?.items,
+    responseData?.data,
+    responseData?.result,
+  ];
 
-/**
- * 2. جلب قائمة الغرف/الوحدات مع التفاصيل الكاملة (الأسعار، الطاقة الاستيعابية، والمواصفات)
- */
-async function getProperties() {
-    try {
-        // يجلب مسار properties التفاصيل المتاحة
-        const response = await axios.get(`${ZAAER_BASE_URL}/properties`, {
-            headers: getHeaders(),
-            params: { page: 1, limit: 50 }
-        });
-
-        const items = response.data?.result?.items || response.data?.items || response.data?.data || [];
-
-        // تمرير التفاصيل الشاملة للغرف حتى يتعرف الذكاء الاصطناعي على مواصفاتها
-        return items.map(item => ({
-            id: item.id,
-            unit_name: item.name || item.title || item.unit_number || `شقة ${item.id}`,
-            type: item.type || item.category_name || item.rate_plan || item.unit_type_name || 'غير محدد',
-            capacity: item.capacity || item.max_guests || 'حسب نوع الشقة',
-            beds: item.bedrooms_count || item.beds || 'غير محدد',
-            price_per_night: item.base_price || item.rate || item.price || 'يتحدد حسب التواريخ',
-            description: item.description || item.notes || '',
-            status: item.status || 'متاحة'
-        }));
-    } catch (error) {
-        console.error('خطأ أثناء جلب الوحدات من Zaaer:', error.response?.data || error.message);
-        return [];
-    }
+  return candidates.find(Array.isArray) || [];
 }
 
-async function getReservationQuote(quoteData) {
-    const url = `${ZAAER_BASE_URL}/reservations/quote`;
-  
-    try {
-      console.log(
-        '📤 Quote request payload:',
-        JSON.stringify(quoteData, null, 2)
-      );
-  
-      const response = await axios.post(url, quoteData, {
-        headers: {
-          ...getHeaders(),
-          'Content-Type': 'application/json',
+// استخراج بيانات التصفح
+function extractMeta(responseData) {
+  return (
+    responseData?.result?.meta ||
+    responseData?.meta ||
+    responseData?.data?.meta ||
+    {}
+  );
+}
+
+// جلب جميع صفحات endpoint مع الاحتفاظ بجميع الحقول الأصلية
+async function getAllPages(endpoint, extraParams = {}) {
+  const allItems = [];
+  const limit = 100;
+  let page = 1;
+  let hasMorePages = true;
+
+  while (hasMorePages) {
+    const response = await axios.get(
+      `${ZAAER_BASE_URL}${endpoint}`,
+      {
+        headers: getHeaders(),
+        params: {
+          ...extraParams,
+          page,
+          limit,
         },
-      });
-  
-      console.log('✅ Quote response status:', response.status);
-      console.log(
-        '📥 Quote response data:',
-        JSON.stringify(response.data, null, 2)
-      );
-  
-      const quoteResult =
-        response.data?.result ?? response.data ?? {};
-  
-      return {
-        success: true,
-        data: quoteResult,
-      };
-    } catch (error) {
-      console.error('❌ Zaaer quote diagnostic:', {
-        message: error.message,
-        status: error.response?.status,
-        responseData: error.response?.data,
-        requestUrl: error.config?.url,
-        requestMethod: error.config?.method,
-        responseContentType:
-          error.response?.headers?.['content-type'],
-        requestId:
-          error.response?.headers?.['x-request-id'],
-      });
-  
-      return {
-        success: false,
-        error: error.response?.data ?? error.message,
-        status: error.response?.status ?? null,
-      };
-    }
-  }
-  
+      }
+    );
 
-/**
- * 4. إنشاء حجز فعلي مؤكد في النظام
- * @param {Object} reservationData - بيانات الحجز الكاملة (العميل، الغرف، التواريخ)
- */
-// داخل zaaerService.js (أو ملف الـ API الخاص بـ Zaaer)
-async function createReservation(payload) {
-    try {
-        const response = await axios.post('https://sahl-suites.zaaer.com/api/v1/reservations', payload, {
-            headers: {
-                'Authorization': `Bearer ${ZAAER_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        return response.data;
-    } catch (error) {
-        // هذا السطر سيلتقط رسالة الخطأ الحقيقية من زائر (حتى لو كانت 409 أو 404 أو 422)
-        if (error.response && error.response.data) {
-            console.error('❌ خطأ تفصيلي من Zaaer API:', JSON.stringify(error.response.data, null, 2));
-            return error.response.data; // إرجاع كائن الخطأ للـ AI ليقرأه ويعرف السبب
-        }
-        throw error;
+    const items = extractItems(response.data);
+
+    if (items.length === 0) {
+      break;
     }
+
+    // لا نحذف أي حقول من استجابة Zaaer
+    allItems.push(...items);
+
+    const meta = extractMeta(response.data);
+
+    if (meta.last_page != null) {
+      hasMorePages = page < Number(meta.last_page);
+    } else if (meta.current_page != null && meta.last_page != null) {
+      hasMorePages =
+        Number(meta.current_page) < Number(meta.last_page);
+    } else {
+      hasMorePages = items.length === limit;
+    }
+
+    page++;
+  }
+
+  return allItems;
 }
 
-// ولا تنسَ إضافتها في module.exports في نهاية الملف:
+// 1. جلب الحجوزات بجميع حقولها
+async function getReservations() {
+  try {
+    const reservations = await getAllPages("/reservations");
+
+    console.log(
+      `📊 إجمالي الحجوزات المسترجعة: ${reservations.length}`
+    );
+
+    return reservations;
+  } catch (error) {
+    console.error("❌ خطأ أثناء جلب الحجوزات:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    throw error;
+  }
+}
+
+// 2. جلب بيانات الوحدات/العقارات دون اختصار حقولها
+async function getProperties() {
+  try {
+    const properties = await getAllPages("/properties");
+
+    console.log(
+      `🏠 إجمالي العناصر المسترجعة من properties: ${properties.length}`
+    );
+
+    return properties;
+  } catch (error) {
+    console.error("❌ خطأ أثناء جلب properties:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    throw error;
+  }
+}
+
+// 3. حساب تسعيرة الحجز وإرجاع كامل بيانات الاستجابة
+async function getReservationQuote(quoteData) {
+  try {
+    console.log("📤 إرسال طلب التسعير إلى Zaaer");
+
+    const response = await axios.post(
+      `${ZAAER_BASE_URL}/reservations/quote`,
+      quoteData,
+      {
+        headers: getHeaders(),
+      }
+    );
+
+    console.log("✅ Quote response status:", response.status);
+
+    return {
+      success: true,
+      data: response.data?.result ?? response.data,
+      rawResponse: response.data,
+    };
+  } catch (error) {
+    console.error("❌ خطأ أثناء حساب التسعيرة:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    return {
+      success: false,
+      error: error.response?.data ?? error.message,
+      status: error.response?.status ?? null,
+    };
+  }
+}
+
+// 4. إنشاء الحجز
+async function createReservation(payload) {
+  try {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Reservation payload must be an object");
+    }
+
+    console.log("📤 إرسال طلب إنشاء الحجز إلى Zaaer");
+
+    const response = await axios.post(
+      `${ZAAER_BASE_URL}/reservations`,
+      payload,
+      {
+        headers: getHeaders(),
+      }
+    );
+
+    const responseData = response.data;
+    const result = responseData?.result ?? responseData;
+
+    // محاولة استخراج رقم الحجز من أشهر أشكال الاستجابة.
+    // يجب التأكد من أسماء الحقول وفق استجابة Zaaer الفعلية.
+    const reservationId =
+      result?.id ??
+      result?.reservation?.id ??
+      result?.reservation_id ??
+      result?.reservation?.reservation_id ??
+      null;
+
+    console.log("📥 Create reservation HTTP status:", response.status);
+    console.log(
+      "🔎 هل أعاد النظام رقم حجز؟",
+      Boolean(reservationId)
+    );
+
+    return {
+      success: true,
+      data: result,
+      rawResponse: responseData,
+      reservationId,
+      requiresVerification: !reservationId,
+    };
+  } catch (error) {
+    console.error("❌ فشل طلب إنشاء الحجز:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    return {
+      success: false,
+      error: error.response?.data ?? error.message,
+      status: error.response?.status ?? null,
+    };
+  }
+}
+
 module.exports = {
-    getReservations,
-    getProperties,
-    getReservationQuote,
-    createReservation 
+  getReservations,
+  getProperties,
+  getReservationQuote,
+  createReservation,
 };
