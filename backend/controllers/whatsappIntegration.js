@@ -176,6 +176,7 @@ async function sendWhatsAppMessage(recipientID, text) {
 // --------------------------------------------------
 
 async function executeTool(name, args) {
+    cosole.log("5555555555555555555555555555")
   console.log("🔧 AI tool call:", name);
   console.log("📥 AI arguments:", JSON.stringify(args, null, 2));
 
@@ -280,6 +281,7 @@ async function executeTool(name, args) {
 // --------------------------------------------------
 
 async function generateAIContentWithRetry(prompt, retries = 3, delay = 5000) {
+    cosole.log("4444444444444444444444444")
   const textPrompt = typeof prompt === 'string' ? prompt : String(prompt || '');
   if (!textPrompt.trim()) throw new Error('Prompt cannot be empty');
 
