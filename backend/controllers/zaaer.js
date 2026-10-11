@@ -25,102 +25,75 @@ const getHeaders = () => {
  */
 async function getReservations() {
     try {
-        let allReservations = [];
-        let currentPage = 1;
-        let hasMorePages = true;
-        const limitPerPage = 100;
-
-        // جلب كافة الصفحات من النظام
-        while (hasMorePages) {
-            const response = await axios.get(`${ZAAER_BASE_URL}/reservations`, {
-                headers: getHeaders(),
-                params: { page: currentPage, limit: limitPerPage }
-            });
-
-            const items = response.data?.result?.items || response.data?.items || [];
-
-            if (items.length === 0) {
-                hasMorePages = false;
-                break;
-            }
-
-            allReservations.push(...items);
-
-            const meta = response.data?.result?.meta || response.data?.meta;
-            if (meta && meta.last_page) {
-                hasMorePages = currentPage < meta.last_page;
-            } else {
-                hasMorePages = items.length === limitPerPage;
-            }
-            currentPage++;
+      let allReservations = [];
+      let currentPage = 1;
+      let hasMorePages = true;
+      const limitPerPage = 100;
+  
+      // جلب جميع صفحات الحجوزات من Zaaer
+      while (hasMorePages) {
+        const response = await axios.get(
+          `${ZAAER_BASE_URL}/reservations`,
+          {
+            headers: getHeaders(),
+            params: {
+              page: currentPage,
+              limit: limitPerPage,
+            },
+          }
+        );
+  
+        const items =
+          response.data?.result?.items ??
+          response.data?.items ??
+          [];
+  
+        if (!Array.isArray(items) || items.length === 0) {
+          hasMorePages = false;
+          break;
         }
-
-        // قائمة الحالات المطلوب عرضها فقط (تجاهل الملغاة والمغادرة)
-        const activeStatuses = ['confirmed', 'unconfirmed', 'checked_in'];
-
-        // فلترة البيانات وتنسيقها
-        const filteredReservations = allReservations
-            .filter(item => {
-                const currentStatus = item.reservation_status || item.status || '';
-                return activeStatuses.includes(currentStatus.toLowerCase());
-            })
-            .map(item => {
-                const primaryRoom = Array.isArray(item.rooms) && item.rooms.length > 0 ? item.rooms[0] : {};
-
-              
-return {
-    id: item.id,
-    reservation_number: item.number,
   
-    property_id: item.property_id ?? null,
+        // الاحتفاظ بجميع الحقول الأصلية لكل حجز
+        allReservations.push(...items);
   
-    guest_name: item.guest?.name || 'غير محدد',
+        const meta =
+          response.data?.result?.meta ??
+          response.data?.meta;
   
-    unit_name:
-      primaryRoom.unit_name ||
-      item.unit_name ||
-      'غير محدد',
+        if (meta?.last_page != null) {
+          hasMorePages = currentPage < meta.last_page;
+        } else {
+          hasMorePages = items.length === limitPerPage;
+        }
   
-    unit_type_id:
-      primaryRoom.unit_type_id ??
-      item.unit_type_id ??
-      null,
+        currentPage++;
+      }
   
-    unit_type_name:
-      primaryRoom.unit_type_name ||
-      item.unit_type_name ||
-      'غير محدد',
+      // إرجاع جميع الحجوزات دون تحديد حقول معينة
+      const allReservationsData = allReservations.map(
+        (item) => ({ ...item })
+      );
   
-    rate_plan_id:
-      primaryRoom.rate_plan_id ??
-      item.rate_plan_id ??
-      null,
+      console.log(
+        `📊 إجمالي الحجوزات المسترجعة: ${allReservationsData.length}`
+      );
   
-    rate_plan_name:
-      primaryRoom.rate_plan_name ||
-      item.rate_plan_name ||
-      'غير محدد',
+      return allReservationsData;
   
-    check_in_date: item.check_in_date,
-    check_out_date: item.check_out_date,
-  
-    status:
-      (item.reservation_status || item.status) === 'checked_in'
-        ? 'مقيم حالياً'
-        : 'مؤكد / بانتظار الوصول',
-  };
-  
-            });
-
-        console.log(`📊 إجمالي الحجوزات النشطة والمستقبلية: ${filteredReservations.length} من أصل ${allReservations.length}`);
-
-        return filteredReservations;
-
     } catch (error) {
-        console.error('خطأ أثناء جلب الحجوزات من Zaaer:', error.response?.data || error.message);
-        return [];
+      console.error(
+        '❌ خطأ أثناء جلب الحجوزات من Zaaer:',
+        {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+        }
+      );
+  
+      return [];
     }
-}
+  }
+  
 
 /**
  * 2. جلب قائمة الغرف/الوحدات مع التفاصيل الكاملة (الأسعار، الطاقة الاستيعابية، والمواصفات)
