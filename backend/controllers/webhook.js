@@ -49,22 +49,16 @@ const handleIncomingMessage = async (req, res) => {
                             const [reservationsData, roomsData] = await Promise.all([
                                 zaaerService.getReservations(),
                                 zaaerService.getProperties()
+
+                                
                             ]);
 
-                            // 🔍 طباعة البيانات المستقبلة من API زائر للتأكد من وجودها
-                            console.log("=== 📦 بيانات الغرف المجلوبة من Zaaer ===");
-                            console.log(JSON.stringify(roomsData, null, 2));
-
-                            console.log("=== 📅 بيانات الحجوزات المجلوبة من Zaaer ===");
-                            console.log(JSON.stringify(reservationsData, null, 2));
+                           
 
                             // 2. بناء الـ Prompt المخصص
                             const prompt = await getPrompt(messageText, reservationsData, roomsData);
 
-                            // 🔍 طباعة الـ Prompt النهائي المرسل للذكاء الاصطناعي
-                            console.log("=== 🤖 النص الكامل (Prompt) المرسل للـ AI ===");
-                            console.log(prompt);
-                            console.log(`==================================================\n`);
+                      
 
                             let replyText = "";
 

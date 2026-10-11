@@ -176,8 +176,6 @@ async function sendWhatsAppMessage(recipientID, text) {
 // --------------------------------------------------
 
 async function executeTool(name, args) {
-  console.log("🔧 AI tool call:", name);
-  console.log("📥 AI arguments:", JSON.stringify(args, null, 2));
 
   switch (name) {
     case 'getReservationQuote': {
@@ -255,7 +253,6 @@ async function executeTool(name, args) {
         },
       };
 
-      console.log('📤 Submitting reservation payload to Zaaer:', JSON.stringify(reservationPayload, null, 2));
 
       const bookingResult = await zaaerService.createReservation(reservationPayload);
 
