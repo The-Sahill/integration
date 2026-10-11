@@ -160,6 +160,8 @@ async function createReservation(payload) {
       throw new Error("Reservation payload must be an object");
     }
 
+    log("📤 Preparing to create a new reservation with payload:", payload);
+
     // بناء الـ Body المعتمد المتوافق مع توثيق Zaaer API
     const formattedPayload = {
       property_id: Number(payload.property_id),
@@ -209,7 +211,7 @@ async function createReservation(payload) {
 
     console.log("📤 Sending formatted reservation request to Zaaer:");
     console.log(JSON.stringify(formattedPayload, null, 2));
-
+log("📤 Zaaer API URL:", `${ZAAER_BASE_URL}/reservations`);
     const response = await axios.post(
       `${ZAAER_BASE_URL}/reservations`,
       formattedPayload,
@@ -217,6 +219,8 @@ async function createReservation(payload) {
         headers: getHeaders(),
       }
     );
+
+    log("✅ Reservation creation response status:", response.status);
 
     const responseData = response.data;
     const result = responseData?.result ?? responseData;

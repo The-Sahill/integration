@@ -552,6 +552,8 @@ async function executeTool(name, args) {
         rate_plan_id: realRatePlanId,
       });
 
+      log('📤 Reservation payload:', reservationPayload);
+
       // الخطوة الثالثة: أرسل طلب الحجز الفعلي.
       const bookingResult =
         await zaaerService.createReservation(reservationPayload);
