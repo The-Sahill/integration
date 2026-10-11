@@ -120,8 +120,7 @@ const createReservationTool = {
         'check_in_date',
         'check_out_date',
         'phone',
-        'unit_type_id',
-        'rate_plan_id',
+        'unit_type_id', // 👈 تم تخفيف القيود لتسهيل العمل عبر الواتساب
       ],
   },
 };
@@ -562,7 +561,7 @@ async function executeTool(name, args) {
         rate_plan_id: realRatePlanId,
       });
 
-      log('📤 Reservation payload:', reservationPayload);
+console.log('📤 Reservation payload:', reservationPayload);
 
       // الخطوة الثالثة: أرسل طلب الحجز الفعلي.
       const bookingResult =
