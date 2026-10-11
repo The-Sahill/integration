@@ -1,9 +1,6 @@
-
 const axios = require("axios");
 
-const ZAAER_BASE_URL =
-  process.env.ZAAER_BASE_URL || "https://sahl-suites.zaaer.com/api/v1";
-
+const ZAAER_BASE_URL = "https://sahl-suites.zaaer.com/api/v1";
 const ZAAER_TOKEN = "1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea";
 
 // إعدادات الاتصال الموحدة
@@ -50,17 +47,14 @@ async function getAllPages(endpoint, extraParams = {}) {
   let hasMorePages = true;
 
   while (hasMorePages) {
-    const response = await axios.get(
-      `${ZAAER_BASE_URL}${endpoint}`,
-      {
-        headers: getHeaders(),
-        params: {
-          ...extraParams,
-          page,
-          limit,
-        },
-      }
-    );
+    const response = await axios.get(`${ZAAER_BASE_URL}${endpoint}`, {
+      headers: getHeaders(),
+      params: {
+        ...extraParams,
+        page,
+        limit,
+      },
+    });
 
     const items = extractItems(response.data);
 
@@ -68,7 +62,6 @@ async function getAllPages(endpoint, extraParams = {}) {
       break;
     }
 
-    // لا نحذف أي حقول من استجابة Zaaer
     allItems.push(...items);
 
     const meta = extractMeta(response.data);
@@ -76,8 +69,7 @@ async function getAllPages(endpoint, extraParams = {}) {
     if (meta.last_page != null) {
       hasMorePages = page < Number(meta.last_page);
     } else if (meta.current_page != null && meta.last_page != null) {
-      hasMorePages =
-        Number(meta.current_page) < Number(meta.last_page);
+      hasMorePages = Number(meta.current_page) < Number(meta.last_page);
     } else {
       hasMorePages = items.length === limit;
     }
@@ -93,9 +85,7 @@ async function getReservations() {
   try {
     const reservations = await getAllPages("/reservations");
 
-    console.log(
-      `📊 إجمالي الحجوزات المسترجعة: ${reservations.length}`
-    );
+    console.log(`📊 إجمالي الحجوزات المسترجعة: ${reservations.length}`);
 
     return reservations;
   } catch (error) {
@@ -109,14 +99,12 @@ async function getReservations() {
   }
 }
 
-// 2. جلب بيانات الوحدات/العقارات دون اختصار حقولها
+// 2. جلب بيانات الوحدات/العقارات
 async function getProperties() {
   try {
     const properties = await getAllPages("/properties");
 
-    console.log(
-      `🏠 إجمالي العناصر المسترجعة من properties: ${properties.length}`
-    );
+    console.log(`🏠 إجمالي العناصر المسترجعة من properties: ${properties.length}`);
 
     return properties;
   } catch (error) {
@@ -130,7 +118,7 @@ async function getProperties() {
   }
 }
 
-// 3. حساب تسعيرة الحجز وإرجاع كامل بيانات الاستجابة
+// 3. حساب تسعيرة الحجز
 async function getReservationQuote(quoteData) {
   try {
     console.log("📤 إرسال طلب التسعير إلى Zaaer");
@@ -165,72 +153,100 @@ async function getReservationQuote(quoteData) {
   }
 }
 
+// 4. إنشاء حجز جديد مع مطابقة شروط Zaaer Documentation
 async function createReservation(payload) {
-    try {
-      if (!payload || typeof payload !== "object") {
-        throw new Error("Reservation payload must be an object");
-      }
-  
-      console.log("📤 Sending reservation request to Zaaer");
-  
-      // عرض بيانات الحجز دون معلومات شخصية
-      console.log("📋 Reservation payload summary:", {
-        property_id: payload.property_id,
-        status: payload.status,
-        check_in_date: payload.check_in_date,
-        check_out_date: payload.check_out_date,
-        rooms: (payload.rooms || []).map((room) => ({
-          unit_type_id: room.unit_type_id,
-          rate_plan_id: room.rate_plan_id,
-          unit_count: room.unit_count,
-          occupancy: room.occupancy,
-        })),
-      });
-  
-      const response = await axios.post(
-        `${ZAAER_BASE_URL}/reservations`,
-        payload,
-        {
-          headers: getHeaders(),
-        }
-      );
-  
-      const responseData = response.data;
-      const result = responseData?.result ?? responseData;
-  
-      const reservationId =
-        result?.id ??
-        result?.reservation?.id ??
-        result?.reservation_id ??
-        result?.reservation?.reservation_id ??
-        null;
-  
-      console.log("📥 Zaaer HTTP status:", response.status);
-      console.log("📥 Zaaer response:", JSON.stringify(responseData, null, 2));
-  
-      return {
-        success: true,
-        data: result,
-        reservationId,
-        // غياب الرقم يعني أننا بحاجة إلى التحقق،
-        // وليس بالضرورة أن الإنشاء فشل.
-        requiresVerification: !reservationId,
-      };
-    } catch (error) {
-      console.error("❌ Zaaer reservation creation failed:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
-  
-      return {
-        success: false,
-        error: error.response?.data ?? error.message,
-        status: error.response?.status ?? null,
-      };
+  try {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Reservation payload must be an object");
     }
+
+    // بناء الـ Body المعتمد المتوافق مع توثيق Zaaer API
+    const formattedPayload = {
+      property_id: Number(payload.property_id),
+      booking_id: payload.booking_id || `BOOK_${Date.now()}`, // معرف فريد إجباري
+      status: payload.status || "new",                         // new, modified, cancelled
+      rental_type: payload.rental_type || "daily",             // daily or monthly
+      check_in_date: payload.check_in_date,                    // YYYY-MM-DD
+      check_out_date: payload.check_out_date,                  // YYYY-MM-DD
+      
+      // تفاصيل العميل (الاسم إجباري)
+      guest: {
+        name: payload.guest?.name || `${payload.guest?.first_name || "Guest"} ${payload.guest?.last_name || ""}`.trim(),
+        phone: payload.guest?.phone || null,
+        email: payload.guest?.email || null,
+        gender: payload.guest?.gender || null,
+        address: payload.guest?.address || null,
+      },
+
+      // تجهيز مصفوفة الغرف وتطبيق القواعد
+      rooms: (payload.rooms || []).map((room) => {
+        // إزالة unit_count لحظر زائر له
+        const { unit_count, ...cleanRoom } = room;
+        
+        return {
+          unit_type_id: Number(cleanRoom.unit_type_id),
+          rate_plan_id: cleanRoom.rate_plan_id ? Number(cleanRoom.rate_plan_id) : null,
+          amount: Number(cleanRoom.amount || 0),
+          occupancy: {
+            adults: cleanRoom.occupancy?.adults ?? 1,
+            children: cleanRoom.occupancy?.children ?? 0,
+            infants: cleanRoom.occupancy?.infants ?? 0,
+          },
+          daily_rates: cleanRoom.daily_rates || [],
+        };
+      }),
+
+      // تجهيز الإجماليات الحسابية
+      totals: payload.totals || {
+        room_charges: Number(payload.rooms?.reduce((acc, r) => acc + (r.amount || 0), 0) || 0),
+        additional_charges: 0,
+        discount: 0,
+        total: Number(payload.rooms?.reduce((acc, r) => acc + (r.amount || 0), 0) || 0),
+      },
+
+      booking_payment_method: payload.booking_payment_method || "pay_at_hotel",
+    };
+
+    console.log("📤 Sending formatted reservation request to Zaaer:");
+    console.log(JSON.stringify(formattedPayload, null, 2));
+
+    const response = await axios.post(
+      `${ZAAER_BASE_URL}/reservations`,
+      formattedPayload,
+      {
+        headers: getHeaders(),
+      }
+    );
+
+    const responseData = response.data;
+    const result = responseData?.result ?? responseData;
+
+    const reservationId =
+      result?.id ??
+      result?.reservation?.id ??
+      result?.reservation_id ??
+      null;
+
+    console.log("📥 Zaaer HTTP status:", response.status);
+    console.log("📥 Zaaer response:", JSON.stringify(responseData, null, 2));
+
+    return {
+      success: true,
+      data: result,
+      reservationId,
+    };
+  } catch (error) {
+    console.error("❌ Zaaer reservation creation failed:");
+    console.error("Status:", error.response?.status);
+    console.error("Details:", JSON.stringify(error.response?.data, null, 2));
+
+    return {
+      success: false,
+      error: error.response?.data ?? error.message,
+      status: error.response?.status ?? null,
+    };
   }
-  
+}
 
 module.exports = {
   getReservations,
