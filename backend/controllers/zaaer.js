@@ -160,18 +160,18 @@ async function createReservation(payload) {
       throw new Error("Reservation payload must be an object");
     }
 
-    log("📤 Preparing to create a new reservation with payload:", payload);
 
     // بناء الـ Body المعتمد المتوافق مع توثيق Zaaer API
-    const formattedPayload = {
+   const formattedPayload = {
       property_id: Number(payload.property_id),
-      booking_id: payload.booking_id || `BOOK_${Date.now()}`, // معرف فريد إجباري
-      status: payload.status || "new",                         // new, modified, cancelled
-      rental_type: payload.rental_type || "daily",             // daily or monthly
-      check_in_date: payload.check_in_date,                    // YYYY-MM-DD
-      check_out_date: payload.check_out_date,                  // YYYY-MM-DD
+      booking_id: payload.booking_id || `BOOK_${Date.now()}`,
+      status: payload.status || "new",
+      rental_type: payload.rental_type || "daily",
+      check_in_date: payload.check_in_date,
+      check_out_date: payload.check_out_date,
+      currency: payload.currency || "JOD", // 👈 أضف هذا السطر هنا ليتم إرساله لزائر
       
-      // تفاصيل العميل (الاسم إجباري)
+      // تفاصيل العميل
       guest: {
         name: payload.guest?.name || `${payload.guest?.first_name || "Guest"} ${payload.guest?.last_name || ""}`.trim(),
         phone: payload.guest?.phone || null,
@@ -211,7 +211,6 @@ async function createReservation(payload) {
 
     console.log("📤 Sending formatted reservation request to Zaaer:");
     console.log(JSON.stringify(formattedPayload, null, 2));
-log("📤 Zaaer API URL:", `${ZAAER_BASE_URL}/reservations`);
     const response = await axios.post(
       `${ZAAER_BASE_URL}/reservations`,
       formattedPayload,
@@ -220,7 +219,6 @@ log("📤 Zaaer API URL:", `${ZAAER_BASE_URL}/reservations`);
       }
     );
 
-    log("✅ Reservation creation response status:", response.status);
 
     const responseData = response.data;
     const result = responseData?.result ?? responseData;

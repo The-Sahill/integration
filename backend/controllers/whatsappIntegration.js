@@ -510,34 +510,44 @@ async function executeTool(name, args) {
       // استخدم الأسعار الحقيقية فقط، دون اختراع أسعار أو totals.
       const room = quote.room;
 
-      const reservationPayload = {
-        property_id: args.property_id,
-        status: 'new',
-        rental_type: args.rental_type || 'daily',
-        check_in_date: args.check_in_date,
-        check_out_date: args.check_out_date,
+  const reservationPayload = {
+     property_id: Number(args.property_id || 1), // 👈 قيمة افتراضية لمنع الخطأ
+     booking_id: `WA_BOOK_${Date.now()}`,
+     status: 'new',
+     rental_type: args.rental_type || 'daily',
+     check_in_date: args.check_in_date,
+     check_out_date: args.check_out_date,
+     currency: "JOD", // 👈 أضفنا العملة لكي لا يرفضها زائر
 
-        guest: {
-          name: fullName,
-          phone,
-          ...(args.email ? { email: args.email } : {}),
-        },
+     guest: {
+       name: fullName,
+       phone,
+       ...(args.email ? { email: args.email } : {}),
+     },
 
-        rooms: [{
-          unit_type_id: realUnitTypeId,
-          rate_plan_id: realRatePlanId,
-          unit_count: 1,
-          occupancy: {
-            adults,
-            children,
-            infants: 0,
-          },
-          amount: room.amount,
-          ...(Array.isArray(room.daily_rates)
-            ? { daily_rates: room.daily_rates }
-            : {}),
-        }],
-      };
+     rooms: [{
+       unit_type_id: realUnitTypeId,
+       rate_plan_id: realRatePlanId,
+       unit_count: 1,
+       occupancy: {
+         adults,
+         children,
+         infants: 0,
+       },
+       amount: room.amount,
+       ...(Array.isArray(room.daily_rates)
+         ? { daily_rates: room.daily_rates }
+         : {}),
+     }],
+
+     totals: {
+       room_charges: room.amount,
+       additional_charges: 0,
+       discount: 0,
+       total: room.amount,
+       currency: "JOD" // 👈 مطابقة تامة لاختبار الزر الناجح
+     },
+   };
 
       if (args.coupon_code) {
         reservationPayload.coupon = quote.data.coupon || {
