@@ -463,13 +463,13 @@ async function executeTool(name, args) {
 
       // الخطوة الأولى: احسب السعر الفعلي من زائر.
       const quotePayload = {
-        property_id: args.property_id || 1,
+        property_id: args.property_id,
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
         rooms: [{
-          unit_type_id: unitTypeId || 5,
-          rate_plan_id: ratePlanId || 1,
+          unit_type_id: unitTypeId,
+          rate_plan_id: ratePlanId,
           unit_count: 1,
           occupancy: {
             adults,
