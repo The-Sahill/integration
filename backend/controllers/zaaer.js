@@ -165,62 +165,72 @@ async function getReservationQuote(quoteData) {
   }
 }
 
-// 4. إنشاء الحجز
 async function createReservation(payload) {
-  try {
-    if (!payload || typeof payload !== "object") {
-      throw new Error("Reservation payload must be an object");
-    }
-
-    console.log("📤 إرسال طلب إنشاء الحجز إلى Zaaer");
-
-    const response = await axios.post(
-      `${ZAAER_BASE_URL}/reservations`,
-      payload,
-      {
-        headers: getHeaders(),
+    try {
+      if (!payload || typeof payload !== "object") {
+        throw new Error("Reservation payload must be an object");
       }
-    );
-
-    const responseData = response.data;
-    const result = responseData?.result ?? responseData;
-
-    // محاولة استخراج رقم الحجز من أشهر أشكال الاستجابة.
-    // يجب التأكد من أسماء الحقول وفق استجابة Zaaer الفعلية.
-    const reservationId =
-      result?.id ??
-      result?.reservation?.id ??
-      result?.reservation_id ??
-      result?.reservation?.reservation_id ??
-      null;
-
-    console.log("📥 Create reservation HTTP status:", response.status);
-    console.log(
-      "🔎 هل أعاد النظام رقم حجز؟",
-      Boolean(reservationId)
-    );
-
-    return {
-      success: true,
-      data: result,
-      rawResponse: responseData,
-      reservationId,
-      requiresVerification: !reservationId,
-    };
-  } catch (error) {
-    console.error("❌ فشل طلب إنشاء الحجز:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message,
-    });
-
-    return {
-      success: false,
-      error: error.response?.data ?? error.message,
-      status: error.response?.status ?? null,
-    };
+  
+      console.log("📤 Sending reservation request to Zaaer");
+  
+      // عرض بيانات الحجز دون معلومات شخصية
+      console.log("📋 Reservation payload summary:", {
+        property_id: payload.property_id,
+        status: payload.status,
+        check_in_date: payload.check_in_date,
+        check_out_date: payload.check_out_date,
+        rooms: (payload.rooms || []).map((room) => ({
+          unit_type_id: room.unit_type_id,
+          rate_plan_id: room.rate_plan_id,
+          unit_count: room.unit_count,
+          occupancy: room.occupancy,
+        })),
+      });
+  
+      const response = await axios.post(
+        `${ZAAER_BASE_URL}/reservations`,
+        payload,
+        {
+          headers: getHeaders(),
+        }
+      );
+  
+      const responseData = response.data;
+      const result = responseData?.result ?? responseData;
+  
+      const reservationId =
+        result?.id ??
+        result?.reservation?.id ??
+        result?.reservation_id ??
+        result?.reservation?.reservation_id ??
+        null;
+  
+      console.log("📥 Zaaer HTTP status:", response.status);
+      console.log("📥 Zaaer response:", JSON.stringify(responseData, null, 2));
+  
+      return {
+        success: true,
+        data: result,
+        reservationId,
+        // غياب الرقم يعني أننا بحاجة إلى التحقق،
+        // وليس بالضرورة أن الإنشاء فشل.
+        requiresVerification: !reservationId,
+      };
+    } catch (error) {
+      console.error("❌ Zaaer reservation creation failed:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+  
+      return {
+        success: false,
+        error: error.response?.data ?? error.message,
+        status: error.response?.status ?? null,
+      };
+    }
   }
-}
+  
 
 module.exports = {
   getReservations,

@@ -333,8 +333,16 @@ async function sendWhatsAppMessage(recipientID, text) {
 // تنفيذ أدوات زائر
 // --------------------------------------------------
 
+
 async function executeTool(name, args) {
+  console.log("🔧 AI tool call:", name);
+  console.log(
+    "📥 AI arguments:",
+    JSON.stringify(args, null, 2)
+  );
+
   switch (name) {
+
     case 'getReservations': {
       const reservations = await zaaerService.getReservations();
 
