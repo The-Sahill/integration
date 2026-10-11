@@ -48,9 +48,10 @@ const handleIncomingMessage = async (req, res) => {
                             // 1. جلب بيانات الحجوزات والغرف بشكل متوازي
                             const [reservationsData, roomsData] = await Promise.all([
                                 zaaerService.getReservations(),
-                                zaaerService.getProperties()
+                                zaaerService.getProperties(),
+                                zaaerService.createReservation()
 
-                                
+
                             ]);
 
                            
