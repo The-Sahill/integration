@@ -10,7 +10,7 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL ='gemini-3.8-flash';
+const MODEL ='gemini-2.5-flash';
 const MAX_TOOL_ROUNDS = 8;
 
 // --------------------------------------------------
@@ -280,7 +280,7 @@ async function executeTool(name, args) {
 // Gemini الدورة الرئيسية
 // --------------------------------------------------
 
-async function generateAIContentWithRetry(prompt, retries = 3, delay = 1000) {
+async function generateAIContentWithRetry(prompt, retries = 3, delay = 5000) {
   const textPrompt = typeof prompt === 'string' ? prompt : String(prompt || '');
   if (!textPrompt.trim()) throw new Error('Prompt cannot be empty');
 
