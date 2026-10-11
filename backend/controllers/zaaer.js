@@ -160,57 +160,49 @@ async function createReservation(payload) {
       throw new Error("Reservation payload must be an object");
     }
 
-
-    // بناء الـ Body المعتمد المتوافق مع توثيق Zaaer API
-   const formattedPayload = {
-      property_id: Number(payload.property_id),
+    // بناء الـ Payload بصيغة مطابقة تماماً للاختبار الناجح وبشكل ديناميكي
+    const formattedPayload = {
+      property_id: Number(payload.property_id || 1),
       booking_id: payload.booking_id || `BOOK_${Date.now()}`,
       status: payload.status || "new",
       rental_type: payload.rental_type || "daily",
       check_in_date: payload.check_in_date,
       check_out_date: payload.check_out_date,
-      currency: payload.currency || "JOD", // 👈 أضف هذا السطر هنا ليتم إرساله لزائر
+      currency: payload.currency || "JOD", // 👈 الحقل في الجذر
       
-      // تفاصيل العميل
       guest: {
-        name: payload.guest?.name || `${payload.guest?.first_name || "Guest"} ${payload.guest?.last_name || ""}`.trim(),
+        name: payload.guest?.name || "Guest",
         phone: payload.guest?.phone || null,
         email: payload.guest?.email || null,
-        gender: payload.guest?.gender || null,
-        address: payload.guest?.address || null,
+        gender: payload.guest?.gender || "male"
       },
 
-      // تجهيز مصفوفة الغرف وتطبيق القواعد
-      rooms: (payload.rooms || []).map((room) => {
-        // إزالة unit_count لحظر زائر له
-        const { unit_count, ...cleanRoom } = room;
-        
-        return {
-          unit_type_id: Number(cleanRoom.unit_type_id),
-          rate_plan_id: cleanRoom.rate_plan_id ? Number(cleanRoom.rate_plan_id) : null,
-          amount: Number(cleanRoom.amount || 0),
-          occupancy: {
-            adults: cleanRoom.occupancy?.adults ?? 1,
-            children: cleanRoom.occupancy?.children ?? 0,
-            infants: cleanRoom.occupancy?.infants ?? 0,
-          },
-          daily_rates: cleanRoom.daily_rates || [],
-        };
-      }),
+      rooms: (payload.rooms || []).map((room) => ({
+        unit_type_id: Number(room.unit_type_id),
+        rate_plan_id: room.rate_plan_id ? Number(room.rate_plan_id) : null,
+        amount: Number(room.amount || 0),
+        occupancy: {
+          adults: room.occupancy?.adults ?? 1,
+          children: room.occupancy?.children ?? 0,
+          infants: room.occupancy?.infants ?? 0
+        },
+        daily_rates: room.daily_rates || []
+      })),
 
-      // تجهيز الإجماليات الحسابية
-      totals: payload.totals || {
-        room_charges: Number(payload.rooms?.reduce((acc, r) => acc + (r.amount || 0), 0) || 0),
-        additional_charges: 0,
-        discount: 0,
-        total: Number(payload.rooms?.reduce((acc, r) => acc + (r.amount || 0), 0) || 0),
+      totals: {
+        room_charges: Number(payload.totals?.room_charges || payload.rooms?.[0]?.amount || 0),
+        additional_charges: Number(payload.totals?.additional_charges || 0),
+        discount: Number(payload.totals?.discount || 0),
+        total: Number(payload.totals?.total || payload.rooms?.[0]?.amount || 0),
+        currency: "JOD" // 👈 الحقل داخل الإجماليات
       },
 
-      booking_payment_method: payload.booking_payment_method || "pay_at_hotel",
+      booking_payment_method: payload.booking_payment_method || "pay_at_hotel"
     };
 
     console.log("📤 Sending formatted reservation request to Zaaer:");
     console.log(JSON.stringify(formattedPayload, null, 2));
+
     const response = await axios.post(
       `${ZAAER_BASE_URL}/reservations`,
       formattedPayload,
@@ -218,7 +210,6 @@ async function createReservation(payload) {
         headers: getHeaders(),
       }
     );
-
 
     const responseData = response.data;
     const result = responseData?.result ?? responseData;
