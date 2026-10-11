@@ -137,7 +137,7 @@ function normalizeQuote(response) {
     data,
     room,
     unitTypeId: room.unit_type_id,
-    ratePlanId: room.rate_plan_id || 1,
+    ratePlanId: room.rate_plan_id || null,
   };
 }
 
@@ -190,7 +190,7 @@ async function executeTool(name, args) {
         check_out_date: args.check_out_date,
         rooms: [{
           unit_type_id: Number(args.unit_type_id),
-          rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : undefined,
+          rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : null,
           unit_count: Number(args.unit_count || 1),
           occupancy: { adults: Number(args.adults || 1), children: Number(args.children || 0), infants: 0 },
         }],
@@ -216,7 +216,7 @@ async function executeTool(name, args) {
         check_out_date: args.check_out_date,
         rooms: [{
           unit_type_id: Number(args.unit_type_id),
-          rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : undefined,
+          rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : null,
           unit_count: 1,
           occupancy: { adults: Number(args.adults || 1), children: Number(args.children || 0), infants: 0 },
         }],
@@ -239,7 +239,7 @@ async function executeTool(name, args) {
 
         rooms: [{
           unit_type_id: Number(quote.unitTypeId),
-          rate_plan_id: Number(quote.ratePlanId),
+          rate_plan_id: Number(quote.ratePlanId) || null,
           unit_count: 1,
           occupancy: { adults: Number(args.adults || 1), children: Number(args.children || 0), infants: 0 },
           amount: room.amount,

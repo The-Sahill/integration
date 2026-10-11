@@ -82,7 +82,7 @@ async function getAllPages(endpoint, extraParams = {}) {
 
 // 1. جلب الحجوزات بجميع حقولها
 async function getReservations() {
-    cosole.log("test333333333333333333")
+    console.log("test333333333333333333")
   try {
     const reservations = await getAllPages("/reservations");
 
@@ -101,7 +101,7 @@ async function getReservations() {
 
 // 2. جلب بيانات الوحدات/العقارات
 async function getProperties() {
-    cosole.log("test2222222222222222222222")
+    console.log("test2222222222222222222222")
   try {
     const properties = await getAllPages("/properties");
 
@@ -155,7 +155,7 @@ async function getReservationQuote(quoteData) {
 // 4. إنشاء حجز جديد مع مطابقة شروط Zaaer Documentation
 async function createReservation(payload) {
 
-  cosole.log("test1111111111111111111111111111111111")
+  console.log("test1111111111111111111111111111111111")
   try {
     if (!payload || typeof payload !== "object") {
       throw new Error("Reservation payload must be an object");
