@@ -110,54 +110,56 @@ async function getProperties() {
     }
 }
 
-/**
- * 3. حساب تسعيرة الحجز (Quote) بناءً على تفاصيل الغرف، التواريخ، والخصومات
- * @param {Object} quoteData - بيانات طلب التسعيرة (التواريخ، الغرف، الكوبون، إلخ)
- */
-
 async function getReservationQuote(quoteData) {
+    const url = `${ZAAER_BASE_URL}/reservations/quote`;
+  
     try {
-        console.log(
-            '📤 Quote request payload:',
-            JSON.stringify(quoteData, null, 2)
-        );
-
-        const response = await axios.post(
-            `${ZAAER_BASE_URL}/reservations/quote`,
-            quoteData,
-            {
-                headers: {
-                    ...getHeaders(),
-                    'Content-Type': 'application/json',
-                }
-            }
-        );
-
-        const quoteResult =
-            response.data?.result || response.data || {};
-
-        console.log('✅ تم جلب تسعيرة الحجز بنجاح');
-
-        return {
-            success: true,
-            data: quoteResult
-        };
-
+      console.log(
+        '📤 Quote request payload:',
+        JSON.stringify(quoteData, null, 2)
+      );
+  
+      const response = await axios.post(url, quoteData, {
+        headers: {
+          ...getHeaders(),
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      console.log('✅ Quote response status:', response.status);
+      console.log(
+        '📥 Quote response data:',
+        JSON.stringify(response.data, null, 2)
+      );
+  
+      const quoteResult =
+        response.data?.result ?? response.data ?? {};
+  
+      return {
+        success: true,
+        data: quoteResult,
+      };
     } catch (error) {
-        console.error(
-            '❌ خطأ أثناء جلب تسعيرة الحجز من Zaaer:',
-            error.response?.data || error.message
-        );
-
-        return {
-            success: false,
-            error: error.response?.data || error.message
-        };
+      console.error('❌ Zaaer quote diagnostic:', {
+        message: error.message,
+        status: error.response?.status,
+        responseData: error.response?.data,
+        requestUrl: error.config?.url,
+        requestMethod: error.config?.method,
+        responseContentType:
+          error.response?.headers?.['content-type'],
+        requestId:
+          error.response?.headers?.['x-request-id'],
+      });
+  
+      return {
+        success: false,
+        error: error.response?.data ?? error.message,
+        status: error.response?.status ?? null,
+      };
     }
-}
-
-
-
+  }
+  
 
 /**
  * 4. إنشاء حجز فعلي مؤكد في النظام
