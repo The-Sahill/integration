@@ -212,7 +212,7 @@ async function createReservation(payload) {
     try {
         const response = await axios.post('https://sahl-suites.zaaer.com/api/v1/reservations', payload, {
             headers: {
-                'Authorization': `Bearer ${ZAAER_API_TOKEN}`,
+                'Authorization': `Bearer ${ZAAER_TOKEN}`,
                 'Content-Type': 'application/json'
             }
         });
