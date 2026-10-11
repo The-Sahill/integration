@@ -1,14 +1,24 @@
 // services/zaaerService.js
 const axios = require('axios');
 
-const ZAAER_BASE_URL = process.env.ZAAER_BASE_URL || 'https://sahl-suites.zaaer.com/api/v1';
-const ZAAER_TOKEN = process.env.ZAAER_API_TOKEN || '1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea';
+const ZAAER_BASE_URL ='https://sahl-suites.zaaer.com/api/v1';
+const ZAAER_TOKEN ='1|bykZSg9iLODV6jITNRHx1rCAhEoYMpEYOHbfKKGRd522b0ea';
 
 // إعداد الترويسات الموحدة
-const getHeaders = () => ({
-    'Authorization': `Bearer ${ZAAER_TOKEN}`,
-    'Accept': 'application/json',
-});
+const getHeaders = () => {
+    if (
+      typeof ZAAER_TOKEN !== 'string' ||
+      !ZAAER_TOKEN.trim()
+    ) {
+      throw new Error('ZAAER_TOKEN is missing or empty');
+    }
+  
+    return {
+      Authorization: `Bearer ${ZAAER_TOKEN.trim()}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+  };
 
 /**
  * 1. جلب قائمة الحجوزات واستخراج رقم الغرفة ونوعها بدقة من مصفوفة rooms
@@ -202,7 +212,7 @@ async function createReservation(payload) {
     try {
         const response = await axios.post('https://sahl-suites.zaaer.com/api/v1/reservations', payload, {
             headers: {
-                'Authorization': `Bearer ${process.env.ZAAER_API_TOKEN}`,
+                'Authorization': `Bearer ${ZAAER_API_TOKEN}`,
                 'Content-Type': 'application/json'
             }
         });
