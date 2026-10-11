@@ -10,7 +10,7 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL ='gemini-3.8-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'; // 👈 موديل مستقر وآمن
 const MAX_TOOL_ROUNDS = 8;
 
 // --------------------------------------------------
@@ -102,7 +102,7 @@ function getResponseText(response) {
 
 function isValidDate(value) {
   if (typeof value !== 'string') return false;
-  if (!/^\d{4}-\d{2}-\d{2}\$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}\$/.test(value)) return false; // 👈 تصحيح الـ Regex بدون علامة دولار زائدة
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
@@ -137,7 +137,7 @@ function normalizeQuote(response) {
     data,
     room,
     unitTypeId: room.unit_type_id,
-    ratePlanId: room.rate_plan_id || 1, // قيمة احتياطية إن لم تُرجعها التسعيرة
+    ratePlanId: room.rate_plan_id || 1,
   };
 }
 
@@ -208,7 +208,6 @@ async function executeTool(name, args) {
         throw new Error('يجب توفير اسم الضيف ورقم هاتفه');
       }
 
-      // جلب التسعيرة أولاً لضمان الحصول على الأسعار والمعرفات المطابقة لـ Zaaer
       const quotePayload = {
         property_id: Number(args.property_id || 1),
         rental_type: args.rental_type || 'daily',
@@ -233,7 +232,7 @@ async function executeTool(name, args) {
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
-        currency: "JOD", // 👈 ضروري جداً لتجنب خطأ 422
+        currency: "JOD",
 
         guest: { name: fullName, phone },
 

@@ -49,7 +49,6 @@ const handleIncomingMessage = async (req, res) => {
                             const [reservationsData, roomsData] = await Promise.all([
                                 zaaerService.getReservations(),
                                 zaaerService.getProperties(),
-                                zaaerService.createReservation()
 
 
                             ]);
