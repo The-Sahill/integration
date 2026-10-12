@@ -102,9 +102,10 @@ function getResponseText(response) {
 
 function isValidDate(value) {
   if (typeof value !== 'string') return false;
-  if (!/^\d{4}-\d{2}-\d{2}\$/.test(value)) return false; // 👈 تصحيح الـ Regex بدون علامة دولار زائدة
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  if (!/^\d{4}-\d{2}-\d{2}\$/.test(value)) return false; // ✅ الصحيح بدون \ قبل الـ \$
+  const date = `${value}T00:00:00Z`;
+  const parsedDate = new Date(date);
+  return !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === value;
 }
 
 function validateDates(checkIn, checkOut) {
