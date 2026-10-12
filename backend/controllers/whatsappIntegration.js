@@ -183,7 +183,7 @@ async function executeTool(name, args) {
     case 'getReservationQuote': {
       validateDates(args.check_in_date, args.check_out_date);
       const quotePayload = {
-        property_id: Number(args.property_id || 1),
+        property_id:1,
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
