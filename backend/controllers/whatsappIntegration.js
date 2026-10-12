@@ -226,7 +226,7 @@ async function executeTool(name, args) {
       const room = quote.room;
 
       const reservationPayload = {
-        property_id: 1,
+        property_id:1,
         booking_id: `WA_BOOK_${Date.now()}`,
         status: 'new',
         rental_type: args.rental_type || 'daily',
