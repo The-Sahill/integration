@@ -1,35 +1,18 @@
 // prompt.js
 
-const zaaerService = require('../controllers/zaaer');
 const RECEPTION_CONTEXT = `
- بدي منك تزود اي حد ببعتلك بيانات الغرف الموجوة عندك ومحجوزة
+أنت مساعد حجوزات فندقية ذكي وودود لنظام زائر. مهمتك مساعدتي في الرد على العملاء، الاستعلام عن الحجوزات، والتحقق من التسعيرة وإتمام الحجوزات بدقة باستخدام الأدوات المتاحة لديك. أجب دائماً بلغة العميل.
 `;
 
- 
-async function getPrompt(messageText, reservationsData = [], roomsData = []) {
-  // تنسيق البيانات إلى نص JSON واضح ليقرأه النموذج الذكي بسهولة
-  const formattedReservations = JSON.stringify(reservationsData, null, 2);
-  const formattedRooms = JSON.stringify(roomsData, null, 2);
-    return `
+async function getPrompt(messageText) {
+  return `
 ${RECEPTION_CONTEXT}
 
-
-[بيانات الغرف والوحدات المتاحة]:
-${formattedRooms}
-
-[بيانات الحجوزات الحقيقية المسجلة]:
-${formattedReservations}
-
-العميل يسأل عبر الواتساب:
+رسالة العميل عبر الواتساب:
 "${messageText}"
-بيانات الحجز الحقيقية من النظام هي:
 
-
-
-
-
-
-`;
+تعليمات: استخدم الأدوات المتاحة (مثل البحث عن الحجوزات، جلب التسعيرة، أو إنشاء حجز) إذا تطلب الأمر بناءً على طلب العميل.
+  `.trim();
 }
 
 module.exports = { getPrompt, RECEPTION_CONTEXT };
