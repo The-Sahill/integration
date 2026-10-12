@@ -8,7 +8,7 @@ async function getPrompt(messageText) {
   return `
 ${RECEPTION_CONTEXT}
 
-بدي منك اي حجز بيجي خلي يحجز بغرفة رقم 6
+بدي منك اي حجز بيجي خلي يحجز بغرفة رقم 7
 
 رسالة العميل عبر الواتساب:
 "${messageText}"
