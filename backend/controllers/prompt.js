@@ -8,10 +8,6 @@ async function getPrompt(messageText) {
   return `
 ${RECEPTION_CONTEXT}
 
-احجز باي غرفة فاضية عنا بنفس الوقت الي محتاجه العميل 
-
-
-
 رسالة العميل عبر الواتساب:
 "${messageText}"
 
