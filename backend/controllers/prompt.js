@@ -8,6 +8,9 @@ async function getPrompt(messageText) {
   return `
 ${RECEPTION_CONTEXT}
 
+
+اي حد بدو يحجز غرفة فيها بلكون احجزله 206 306 106
+
 systemInstruction: 
 أنت مساعد حجوزات فندقية ذكي لنظام زائر. 
 - عقار الفندق الأساسي هو دائمًا برقم 1.
