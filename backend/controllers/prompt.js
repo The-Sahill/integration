@@ -9,7 +9,6 @@ async function getPrompt(messageText) {
 ${RECEPTION_CONTEXT}
 
 
-اي حد بدو يحجز غرفة فيها بلكون احجزله 206 306 106
 
 systemInstruction: 
 أنت مساعد حجوزات فندقية ذكي لنظام زائر. 
