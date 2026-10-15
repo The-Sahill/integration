@@ -10,12 +10,8 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const MODEL = 'gemini-3.8-flash'; // الموديل المستقر
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'; // 👈 موديل مستقر وآمن
 const MAX_TOOL_ROUNDS = 8;
-
-// 🧠 ذاكرة مؤقتة لتخزين محادثات العملاء بناءً على رقم الهاتف (Session Memory)
-// (مستقبلاً سننقلها إلى قاعدة بيانات مثل MongoDB)
-const chatSessions = {};
 
 // --------------------------------------------------
 // أدوات Gemini
@@ -27,7 +23,10 @@ const getReservationsTool = {
   parameters: {
     type: 'OBJECT',
     properties: {
-      searchQuery: { type: 'STRING', description: 'رقم الحجز أو اسم النزيل' },
+      searchQuery: {
+        type: 'STRING',
+        description: 'رقم الحجز أو اسم النزيل',
+      },
     },
     required: ['searchQuery'],
   },
@@ -103,6 +102,7 @@ function getResponseText(response) {
 
 function isValidDate(value) {
   if (typeof value !== 'string') return false;
+  // تحقق بسيط يضمن أن النص موجود ويبدأ بـ 4 أرقام (صيغة تاريخ مقبولة)
   return value.trim().length >= 10;
 }
 
@@ -113,6 +113,14 @@ function validateDates(checkIn, checkOut) {
   if (checkOut <= checkIn) {
     throw new Error('تاريخ المغادرة يجب أن يكون بعد تاريخ الوصول');
   }
+}
+
+function requiredPositiveNumber(value, field) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error(`قيمة ${field} غير صحيحة أو غير موجودة`);
+  }
+  return number;
 }
 
 function normalizeQuote(response) {
@@ -141,6 +149,14 @@ function findReservationIdentifier(data, depth = 0) {
   return null;
 }
 
+function safeError(error) {
+  return {
+    message: error.message,
+    status: error.response?.status,
+    details: error.response?.data,
+  };
+}
+
 async function sendWhatsAppMessage(recipientID, text) {
   if (!process.env.PHONE_NUMBER_ID || !process.env.ACCESS_TOKEN) {
     throw new Error('Missing WhatsApp API environment variables');
@@ -159,22 +175,20 @@ async function sendWhatsAppMessage(recipientID, text) {
 // --------------------------------------------------
 
 async function executeTool(name, args) {
+    console.log("5555555555555555555555555555")
   console.log("🔧 AI tool call:", name);
   console.log("📥 AI arguments:", JSON.stringify(args, null, 2));
 
   switch (name) {
     case 'getReservationQuote': {
       validateDates(args.check_in_date, args.check_out_date);
-      const propertyId = Number(args.property_id || 1); // تثبيت العقار على 1 دائماً
-      const unitTypeId = Number(args.unit_type_id || 6);
-
       const quotePayload = {
-        property_id: propertyId,
+        property_id:1,
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
         rooms: [{
-          unit_type_id: unitTypeId,
+          unit_type_id: Number(args.unit_type_id),
           rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : null,
           unit_count: Number(args.unit_count || 1),
           occupancy: { adults: Number(args.adults || 1), children: Number(args.children || 0), infants: 0 },
@@ -194,16 +208,13 @@ async function executeTool(name, args) {
         throw new Error('يجب توفير اسم الضيف ورقم هاتفه');
       }
 
-      const propertyId = Number(args.property_id || 1); // تثبيت العقار على 1 دائماً
-      const unitTypeId = Number(args.unit_type_id || 6);
-
       const quotePayload = {
-        property_id: propertyId,
+        property_id: Number(args.property_id || 1),
         rental_type: args.rental_type || 'daily',
         check_in_date: args.check_in_date,
         check_out_date: args.check_out_date,
         rooms: [{
-          unit_type_id: unitTypeId,
+          unit_type_id: Number(args.unit_type_id),
           rate_plan_id: args.rate_plan_id ? Number(args.rate_plan_id) : null,
           unit_count: 1,
           occupancy: { adults: Number(args.adults || 1), children: Number(args.children || 0), infants: 0 },
@@ -215,7 +226,7 @@ async function executeTool(name, args) {
       const room = quote.room;
 
       const reservationPayload = {
-        property_id: propertyId,
+        property_id: Number(args.property_id || 1),
         booking_id: `WA_BOOK_${Date.now()}`,
         status: 'new',
         rental_type: args.rental_type || 'daily',
@@ -265,35 +276,25 @@ async function executeTool(name, args) {
 }
 
 // --------------------------------------------------
-// دورة الذكاء الاصطناعي مع الحفاظ على ذاكرة المحادثة للعميل
+// Gemini الدورة الرئيسية
 // --------------------------------------------------
 
-async function generateAIContentWithRetry(senderID, prompt, retries = 3, delay = 5000) {
+async function generateAIContentWithRetry(prompt, retries = 3, delay = 5000) {
+    console.log("4444444444444444444444444")
   const textPrompt = typeof prompt === 'string' ? prompt : String(prompt || '');
   if (!textPrompt.trim()) throw new Error('Prompt cannot be empty');
 
-  // إنشاء سجل محادثة خاص برقم العميل إذا لم يكن موجوداً
-  if (!chatSessions[senderID]) {
-    chatSessions[senderID] = [];
-  }
-
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-  const chat = ai.chats.create({
+      const chat = ai.chats.create({
         model: MODEL,
-        history: chatSessions[senderID],
         config: {
           tools,
-          systemInstruction: `
-أنت مساعد حجوزات فندقية ذكي واحترافي لنظام زائر.
-- رقم العقار الأساسي ثابت دائماً على (1).
-- التواريخ التي يكتبها العميل (مثل 16/10/2026) يجب أن تحولها بنفسك فوراً إلى صيغة (2026-10-16).
-- لا تسأل أبدًا أسئلة غامضة أو تفترض أرقاماً غير موجودة (مثل السؤال عن رقم 3). إذا كان هناك نقص في البيانات (مثل نوع الوحدة، التواريخ، الاسم، أو الهاتف)، اطلبه بوضوح وبصيغة مباشرة من العميل.
-- عندما تكتمل البيانات (التواريخ، نوع الوحدة أو الافتراضية، اسم الضيف، ورقم الهاتف)، قم فوراً باستدعاء أداة إنشاء الحجز.
-- أجب دائماً بلغة العميل وبألوب لطيف وواضح.
-          `.trim(),
+          systemInstruction: `أنت مساعد حجوزات فندقية لنظام زائر. اجمع تفاصيل الحجز (التواريخ، العقار، نوع الوحدة، اسم الضيف، ورقم الهاتف) ثم استخدم أدوات التسعيرة والحجز بدقة. أجب دائماً بلغة العميل.`.trim(),
         },
       });
+
+      console.log(`7777777777777777777777777777777777`);
 
       let response = await chat.sendMessage({ message: textPrompt });
 
@@ -312,18 +313,13 @@ async function generateAIContentWithRetry(senderID, prompt, retries = 3, delay =
           }
         }
 
+        console.log(`88888888888888888`);
+
         response = await chat.sendMessage({ message: functionResponses });
       }
 
       const finalText = getResponseText(response);
       if (!finalText) return 'عذرًا، لم أتمكن من تأكيد الحجز. يرجى المحاولة لاحقًا.';
-
-      // 🧠 حفظ الرسالة والرد في تاريخ محادثة هذا العميل المحدد
-      chatSessions[senderID].push(
-        { role: 'user', parts: [{ text: textPrompt }] },
-        { role: 'model', parts: [{ text: finalText }] }
-      );
-
       return finalText;
 
     } catch (error) {
