@@ -268,32 +268,35 @@ async function executeTool(name, args) {
 // دورة الذكاء الاصطناعي مع الحفاظ على ذاكرة المحادثة للعميل
 // --------------------------------------------------
 
+
 async function generateAIContentWithRetry(senderID, prompt, retries = 3, delay = 5000) {
   const textPrompt = typeof prompt === 'string' ? prompt : String(prompt || '');
   if (!textPrompt.trim()) throw new Error('Prompt cannot be empty');
 
-  // إنشاء سجل محادثة خاص برقم العميل إذا لم يكن موجوداً
+  // إذا لم تكن جلسة المحادثة موجودة لهذا الرقم، ننشئ جلسة Chat جديدة ونحفظها
   if (!chatSessions[senderID]) {
-    chatSessions[senderID] = [];
+    chatSessions[senderID] = ai.chats.create({
+      model: MODEL,
+      config: {
+        tools,
+        systemInstruction: `
+أنت مساعد حجوزات فندقية ذكي واحترافي لنظام زائر.
+- رقم العقار الأساسي ثابت دائماً على (1).
+- قم بتأويل وتحويل التواريخ التي يرسلها العميل بأي صيغة (مثل 17/10/2026) فوراً إلى صيغة YYYY-MM-DD (أي 2026-10-17).
+- إذا غاب رقم الوحدة عن طلب العميل، افترض نوع الوحدة الافتراضي (6) أو اختر الوحدة المناسبة ونفذ الحجز مباشرة.
+- لا تذكر أو تسأل عن أي أرقام عشوائية أو تفترض أرقاماً غير موجودة كـ (3) إطلاقاً.
+- عندما تكتمل بيانات الحجز (التواريخ، اسم الضيف، الهاتف)، قم باستدعاء أداة createReservation فوراً.
+- أجب دائماً بلغة العميل وبأسلوب لطيف ومباشر.
+        `.trim(),
+      },
+    });
   }
+
+  const chat = chatSessions[senderID];
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const chat = ai.chats.create({
-        model: MODEL,
-        history: chatSessions[senderID], // 👈 تمرير تاريخ المحادثة ليتذكر الاسم والتفاصيل السابقة
-        config: {
-          tools,
-          systemInstruction: `
-أنت مساعد حجوزات فندقية ذكي لنظام زائر. 
-- رقم العقار الأساسي ثابت دائماً على (1).
-- تذكر دائمًا تفاصيل العميل السابقة (مثل اسمه، رقمه، تواريخه، أو نوع الوحدة) التي ذكرها في رسائله السابقة ضمن هذه المحادثة.
-- اجمع التفاصيل (التواريخ، نوع الوحدة، اسم الضيف، ورقم الجوال) بالتدريج إذا لم يرسلها دفعة واحدة، ثم قم بتنفيذ الحجز فور اكتمالها.
-- أجب دائماً بلغة العميل وبأسلوب لطيف واحترافي.
-          `.trim(),
-        },
-      });
-
+      // 👈 كائن الشات يحفظ الـ History بنفسه تلقائياً دون الحاجة لـ .push يدوية
       let response = await chat.sendMessage({ message: textPrompt });
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -317,21 +320,16 @@ async function generateAIContentWithRetry(senderID, prompt, retries = 3, delay =
       const finalText = getResponseText(response);
       if (!finalText) return 'عذرًا، لم أتمكن من تأكيد الحجز. يرجى المحاولة لاحقًا.';
 
-      // 🧠 حفظ الرسالة والرد في تاريخ محادثة هذا العميل المحدد
-     // 🧠 حفظ الرسالة والرد في تاريخ محادثة هذا العميل (بحد أقصى آخر 5 رسائل فقط لمنع التكرار)
-     chatSessions[senderID].push(
-      { role: 'user', parts: [{ text: textPrompt }] },
-      { role: 'model', parts: [{ text: finalText }] }
-    );
-
-    if (chatSessions[senderID].length > 10) {
-      chatSessions[senderID] = chatSessions[senderID].slice(-10); // الاحتفاظ بآخر 5 تفاعلات فقط
-    }
-
       return finalText;
 
     } catch (error) {
       console.error(`Gemini attempt ${attempt} failed:`, error.message);
+      
+      // في حال حدوث خطأ استنزاف أو انهيار بالجلسة، نعيد تصفير جلسة العميل لتبدأ نظيفة
+      if (error.message.includes('429') || attempt === retries) {
+        delete chatSessions[senderID];
+      }
+      
       if (attempt === retries) return 'عذرًا، حدث خطأ أثناء معالجة طلبك. لم أتمكن من تأكيد الحجز.';
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
