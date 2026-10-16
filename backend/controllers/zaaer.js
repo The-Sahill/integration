@@ -164,7 +164,7 @@ async function createReservation(payload) {
     // بناء الـ Payload بصيغة مطابقة تماماً للاختبار الناجح وبشكل ديناميكي
     const formattedPayload = {
       property_id: Number(payload.property_id || 1),
-      booking_id: payload.booking_id || `BOOK_${Date.now()}`,
+      booking_id: payload.booking_id || null,
       status: payload.status || "new",
       rental_type: payload.rental_type || "daily",
       check_in_date: payload.check_in_date,
