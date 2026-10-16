@@ -318,10 +318,15 @@ async function generateAIContentWithRetry(senderID, prompt, retries = 3, delay =
       if (!finalText) return 'عذرًا، لم أتمكن من تأكيد الحجز. يرجى المحاولة لاحقًا.';
 
       // 🧠 حفظ الرسالة والرد في تاريخ محادثة هذا العميل المحدد
-      chatSessions[senderID].push(
-        { role: 'user', parts: [{ text: textPrompt }] },
-        { role: 'model', parts: [{ text: finalText }] }
-      );
+     // 🧠 حفظ الرسالة والرد في تاريخ محادثة هذا العميل (بحد أقصى آخر 5 رسائل فقط لمنع التكرار)
+     chatSessions[senderID].push(
+      { role: 'user', parts: [{ text: textPrompt }] },
+      { role: 'model', parts: [{ text: finalText }] }
+    );
+
+    if (chatSessions[senderID].length > 10) {
+      chatSessions[senderID] = chatSessions[senderID].slice(-10); // الاحتفاظ بآخر 5 تفاعلات فقط
+    }
 
       return finalText;
 
