@@ -67,14 +67,14 @@ const handleIncomingMessage = async (req, res) => {
                                     },
                                     $push: { messages: customerMsg },$setOnInsert: { aiEnabled: true, status: 'active' }
                                 },
-                                { upsert: true, new: true }
+                                { upsert: true, returnDocument: 'after' }
                             );
 
                             console.log(`💾 تم حفظ رسالة العميل في MongoDB (${customerPhone})`);
 
                             // 2. التحقق مما إذا كان الـ AI مفعلاً للمحادثة
                             if (!conversation.aiEnabled) {
-                                console.log(`⏸️ الـ AI معطل للمحادثة ${customerPhone}. لن يتم توليد رد آلي.`);
+                                console.log(`⏸️ الـ AI معطل للمحادثة ${customerPhone}. لن يتم توليد رد آلي (بانتظار رد الموظف).`);
                                 continue;
                             }
 
@@ -111,7 +111,8 @@ const handleIncomingMessage = async (req, res) => {
                                 { customerPhone: customerPhone },
                                 {
                                     $set: { lastMessage: replyText, lastTime: aiTime },$push: { messages: aiMsg }
-                                }
+                                },
+                                { returnDocument: 'after' }
                             );
 
                             // 7. إرسال الرد للعميل عبر الواتساب
