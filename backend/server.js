@@ -3,33 +3,45 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+
 const webhookRoute = require('./routes/webhookRoute');
-const zaaerService = require('./controllers/zaaer'); // تأكد أن المسار صحيح لملف zaaer لديك
+const chatRoute = require('./routes/chatRoute');
+const zaaerService = require('./controllers/zaaer');
 
 const app = express();
 app.use(cors());
-
 app.use(bodyParser.json());
 
-// مسار فحص سريع للتأكد أن السيرفر يعمل
+// 1. الاتصال بقاعدة البيانات MongoDB أولاً وقبل كل شيء
+const MONGO_URI = process.env.MongoDB_URL;
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ تم الاتصال بقاعدة البيانات MongoDB بنجاح'))
+  .catch((err) => console.error('❌ خطأ في الاتصال بقاعدة البيانات:', err.message));
+
+// 2. مسار فحص سريع للتأكد أن السيرفر يعمل
 app.get('/', (req, res) => {
     res.status(200).send("Server is running and ready! 🚀");
 });
 
-// ربط مسار الـ Webhook الخاص بالواتساب
+// 3. ربط مسارات الـ Webhook و الـ Dashboard
 app.use('/webhook', webhookRoute);
+app.use('/api/dashboard', chatRoute);
+
+// 4. مسار اختبار الحجز المباشر
 app.post('/api/test-direct-booking', async (req, res) => {
   try {
     console.log("🚀 جاري اختبار الحجز المباشر ببيانات ثابتة لـ Zaaer...");
 
- const staticPayload = {
-      property_id: 1,                    // استبدل برقم العقار الحقيقي لديك في زائر
+    const staticPayload = {
+      property_id: 1, 
       booking_id: `DIRECT_TEST_${Date.now()}`,
       status: "new",
       rental_type: "daily",
       check_in_date: "2026-11-01",
       check_out_date: "2026-11-03",
-      currency: "JOD",                   // 👈 وضعناه هنا في الجذر ليتوافق مع طلبهم
+      currency: "JOD", 
       
       guest: {
         name: "Test Direct User",
@@ -40,9 +52,9 @@ app.post('/api/test-direct-booking', async (req, res) => {
 
       rooms: [
         {
-          unit_type_id: 6,               // استبدل برقم نوع الوحدة الحقيقي لديك
-          rate_plan_id: null,            // أو رقم خطة السعر إن وجد
-          amount: 200,                   // مجموع السعر ليلتين
+          unit_type_id: 6, 
+          rate_plan_id: null, 
+          amount: 200, 
           occupancy: {
             adults: 1,
             children: 0,
@@ -60,7 +72,7 @@ app.post('/api/test-direct-booking', async (req, res) => {
         additional_charges: 0,
         discount: 0,
         total: 200,
-        currency: "JOD"                  // 👈 ووضعناه احتياطياً داخل الـ totals أيضاً لضمان مطابقة الـ validation
+        currency: "JOD" 
       },
 
       booking_payment_method: "pay_at_hotel"
@@ -92,10 +104,8 @@ app.post('/api/test-direct-booking', async (req, res) => {
   }
 });
 
-
-app.use('/', require('./routes/chatRoute'));
-
+// 5. تشغيل السيرفر في النهاية
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

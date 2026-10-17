@@ -27,6 +27,8 @@ export default function HotelChatDashboard() {
   // 1. جلب المحادثات الحقيقية من الباك إند و MongoDB
   const fetchConversations = async () => {
     try {
+      console.log("dsaasddddddddddddddddddddd")
+      console.log(API_BASE_URL)
       const response = await axios.get(`${API_BASE_URL}/conversations`);
       const data = response.data;
       setConversations(data);
