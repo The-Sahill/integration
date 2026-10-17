@@ -93,7 +93,7 @@ app.post('/api/test-direct-booking', async (req, res) => {
 });
 
 
-app.use('/api/dashboard', require('./routes/chatRoute'));
+app.use('/', require('./routes/chatRoute'));
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
