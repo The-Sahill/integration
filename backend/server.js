@@ -14,10 +14,27 @@ const app = express();
 const server = http.createServer(app); // 👈 إنشاء السيرفر
 
 // 👈 إعدادات الـ Socket.io والسماح بالـ CORS
+// server.js
+
+// قائمة النطاقات المسموح لها بالاتصال
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://integration-nqeh.onrender.com"
+];
+
+// 1. إعداد CORS للـ Express
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+  credentials: true
+}));
+
+// 2. إعداد CORS للـ Socket.io
 const io = new Server(server, {
   cors: {
-    origin: "*", // يمكنك تحديد رابط الفرونت إند لاحقاً للأمان
-    methods: ["GET", "POST", "PATCH"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PATCH"],
+    credentials: true
   }
 });
 
