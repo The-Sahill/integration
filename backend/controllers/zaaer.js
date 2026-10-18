@@ -80,21 +80,37 @@ async function getAllPages(endpoint, extraParams = {}) {
   return allItems;
 }
 
-// 1. جلب الحجوزات بجميع حقولها
-async function getReservations() {
-    console.log("test333333333333333333")
+// 1. جلب الحجوزات مع دعم البحث عن عميل محدد
+// 1. جلب الحجوزات (يدعم جلب الكل للـ Availability Check أو الفلترة لعميل معين)
+async function getReservations(params = {}) {
+  console.log("test333333333333333333 - جلب الحجوزات من Zaaer");
   try {
+    // 1. جلب كافة الحجوزات من Zaaer
     const reservations = await getAllPages("/reservations");
 
+    // 2. إذا أرسل Gemini كلمة بحث (اسم عميل أو رقم هاتف)، نفلتر النتائج له
+    const query = typeof params === 'string' 
+      ? params 
+      : (params?.searchQuery || params?.name || params?.phone);
 
+    if (query && typeof query === 'string' && query.trim() !== '') {
+      const cleanQuery = query.trim().toLowerCase();
+      return reservations.filter(res => {
+        const guestName = (res.guest?.name || "").toLowerCase();
+        const guestPhone = (res.guest?.phone || "").toLowerCase();
+        return guestName.includes(cleanQuery) || guestPhone.includes(cleanQuery);
+      });
+    }
+
+    // 3. إذا لم يرسل كلمة بحث (طلب جلب عادي للتحقق من الشواغر)، نرجع جميع الحجوزات
     return reservations;
+
   } catch (error) {
     console.error("❌ خطأ أثناء جلب الحجوزات:", {
       status: error.response?.status,
       data: error.response?.data,
       message: error.message,
     });
-
     throw error;
   }
 }
