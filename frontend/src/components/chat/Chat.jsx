@@ -32,23 +32,32 @@ export default function HotelChatDashboard() {
   const socketRef = useRef(null); // 👈 مرجع للاتصال الحي
 
   // 1. جلب المحادثات لمرة واحدة عند الفتح فقط
-  const fetchConversations = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/conversations`);
-      const data = response.data;
-      setConversations(data);
+const fetchConversations = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/conversations`);
+    const data = response.data;
 
+    // 🛡️ حماية أكيدة: تأكد أن البيانات قادمة على شكل مصفوفة وليست رسالة خطأ
+    if (Array.isArray(data)) {
+      setConversations(data);
       if (data.length > 0 && !activeId) {
         setActiveId(data[0]._id);
       }
-      setLoading(false);
       setError(null);
-    } catch (err) {
-      console.error('خطأ في جلب المحادثات:', err);
-      setError("تعذر الاتصال بالخادم.");
-      setLoading(false);
+    } else {
+      console.error('البيانات القادمة ليست مصفوفة:', data);
+      setConversations([]); // تجنب الانهيار بجعلها مصفوفة فارغة
+      setError("تنسيق البيانات الواردة من السيرفر غير صحيح.");
     }
-  };
+
+    setLoading(false);
+  } catch (err) {
+    console.error('خطأ في جلب المحادثات:', err);
+    setConversations([]); // 👈 منع انهيار التطبيق عند حدوث خطأ في الـ API
+    setError("تعذر الاتصال بالخادم لجلب المحادثات.");
+    setLoading(false);
+  }
+};
 
   // 2. إعداد الاتصال الحي عبر Socket.io (بدون تكرار مزعج)
   useEffect(() => {
