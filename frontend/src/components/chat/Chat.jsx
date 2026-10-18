@@ -6,8 +6,16 @@ import {
   CheckCheck, RefreshCw, Zap
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:4000/api/dashboard';
-const SOCKET_URL = 'http://localhost:4000'; // 👈 رابط السيرفر الأساسي للـ Sockets
+
+
+// تحديد رابط السيرفر تلقائياً بناءً على مكان تشغيل الصفحة
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// إذا فتحت الموقع محلياً يتصل بـ localhost، وإذا فتحته من الرابط الأونلاين يتصل بسيرفر Render
+const SOCKET_URL = IS_LOCAL 
+  ? 'http://localhost:4000' 
+  : 'https://the-sahill-stays-integration.onrender.com';
+
 
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150";
 
