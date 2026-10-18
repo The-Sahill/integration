@@ -1,10 +1,9 @@
 // controllers/webhookController.js
 const { getPrompt } = require('./prompt');
 const { sendWhatsAppMessage, generateAIContentWithRetry } = require('../controllers/whatsappIntegration');
-const zaaerService = require('../controllers/zaaer'); // استدعاء خدمة Zaaer
-const Conversation = require('../models/Conversation'); // 👈 استدعاء موديل المحادثات في MongoDB
+const zaaerService = require('../controllers/zaaer');
+const Conversation = require('../models/Conversation');
 
-// معالجة طلب التحقق (GET)
 const verifyWebhook = (req, res) => {
     const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "yhihkuhyga"; 
     const mode = req.query['hub.mode'];
@@ -22,12 +21,11 @@ const verifyWebhook = (req, res) => {
     return res.sendStatus(400);
 };
 
-// معالجة الرسائل الواردة (POST)
 const handleIncomingMessage = async (req, res) => {
     const body = req.body;
+    const io = req.app.get('io'); // 👈 جلب كائن الـ Socket.io
 
     if (body.object === 'whatsapp_business_account') {
-        // إرسال 200 فوراً لفيسبوك لمنع إشعار التكرار
         res.status(200).send('EVENT_RECEIVED');
 
         try {
@@ -38,26 +36,24 @@ const handleIncomingMessage = async (req, res) => {
                         
                         if (value.messages && value.messages.length > 0) {
                             const message = value.messages[0];
-                            const senderID = message.from; // الرقم بدون +
-                            const customerPhone = `+${senderID}`; // الرقم مع علامة + للتخزين
+                            const senderID = message.from; 
+                            const customerPhone = `+${senderID}`; 
                             const messageText = message.text ? message.text.body : ''; 
                             const contactName = value.contacts?.[0]?.profile?.name || 'عميل واتساب';
 
                             if (!messageText) continue;
 
-                            console.log(`\n==================================================`);
-                            console.log(`📩 رسالة جديدة من: ${customerPhone} -> النص: ${messageText}`);
-
+                            console.log(`\n📩 رسالة جديدة من: ${customerPhone} -> النص: ${messageText}`);
                             const currentTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-                            // 1. حفظ رسالة العميل في MongoDB وجلب حالة المحادثة
                             const customerMsg = {
                                 sender: 'customer',
                                 text: messageText,
                                 time: currentTime
                             };
 
-                            const conversation = await Conversation.findOneAndUpdate(
+                            // 1. حفظ رسالة العميل
+                            let conversation = await Conversation.findOneAndUpdate(
                                 { customerPhone: customerPhone },
                                 {
                                     $set: {
@@ -70,44 +66,40 @@ const handleIncomingMessage = async (req, res) => {
                                 { upsert: true, returnDocument: 'after' }
                             );
 
-                            console.log(`💾 تم حفظ رسالة العميل في MongoDB (${customerPhone})`);
+                            // 👈 بث المحادثة المحدثة فوراً للفرونت إند عبر الـ Socket
+                            io.emit('new_message_received', conversation);
 
-                            // 2. التحقق مما إذا كان الـ AI مفعلاً للمحادثة
                             if (!conversation.aiEnabled) {
-                                console.log(`⏸️ الـ AI معطل للمحادثة ${customerPhone}. لن يتم توليد رد آلي (بانتظار رد الموظف).`);
+                                console.log(`⏸️ الـ AI معطل للمحادثة ${customerPhone}.`);
                                 continue;
                             }
 
-                            // 3. جلب بيانات الحجوزات والغرف بشكل متوازي عند تفعيل الـ AI
+                            // 2. معالجة الـ AI
                             const [reservationsData, roomsData] = await Promise.all([
                                 zaaerService.getReservations(),
                                 zaaerService.getProperties()
                             ]);
 
-                            // 4. بناء الـ Prompt المخصص
                             const prompt = await getPrompt(messageText, reservationsData, roomsData);
-
                             let replyText = "";
 
-                            // 5. توليد الرد عبر الذكاء الاصطناعي
                             try {
                                 const aiText = await generateAIContentWithRetry(prompt, 3, 1000);
                                 replyText = aiText || "أهلاً بك، كيف يمكنني مساعدتك اليوم؟";
                             } catch (aiError) {
-                                console.error('فشلت جميع محاولات الاتصال بالذكاء الاصطناعي:', aiError.message);
-                                replyText = "يوجد عطل فني في الرد التلقائي للحجوزات والاستفسار، يرجى التواصل على الرقم 00962791772424";
+                                console.error('فشل الاتصال بالذكاء الاصطناعي:', aiError.message);
+                                replyText = "يوجد عطل فني في الرد التلقائي للحجوزات، يرجى التواصل على الرقم 00962791772424";
                             }
 
                             const aiTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-
-                            // 6. حفظ رد الـ AI في MongoDB
                             const aiMsg = {
                                 sender: 'ai',
                                 text: replyText,
                                 time: aiTime
                             };
 
-                            await Conversation.findOneAndUpdate(
+                            // 3. حفظ رد الـ AI
+                            conversation = await Conversation.findOneAndUpdate(
                                 { customerPhone: customerPhone },
                                 {
                                     $set: { lastMessage: replyText, lastTime: aiTime },$push: { messages: aiMsg }
@@ -115,9 +107,11 @@ const handleIncomingMessage = async (req, res) => {
                                 { returnDocument: 'after' }
                             );
 
-                            // 7. إرسال الرد للعميل عبر الواتساب
+                            // 👈 بث رد الـ AI للفرونت إند فوراً
+                            io.emit('new_message_received', conversation);
+
                             await sendWhatsAppMessage(senderID, replyText);
-                            console.log('✅ تم إرسال وحفظ رد الـ AI بنجاح للعميل');
+                            console.log('✅ تم إرسال وحفظ رد الـ AI بنجاح');
                         }
                     }
                 }

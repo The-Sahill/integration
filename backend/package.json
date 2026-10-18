@@ -19,6 +19,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "moment": "^2.30.1",
-    "mongoose": "^9.9.1"
+    "mongoose": "^9.9.1",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4"
   }
 }
