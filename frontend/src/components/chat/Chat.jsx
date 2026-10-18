@@ -16,6 +16,8 @@ const SOCKET_URL = IS_LOCAL
   ? 'http://localhost:4000' 
   : 'https://the-sahill-stays-integration.onrender.com';
 
+const API_BASE_URL = `${SOCKET_URL}/api/dashboard`;
+
 
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150";
 
