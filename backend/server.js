@@ -1,70 +1,87 @@
-// server.js
-require('dotenv').config();
-const express = require('express');
+// server.js — عملية واحدة: API + Webhooks + Socket.io + المُجدول + واجهة اللوحة (بعد البناء)
+const config = require('./config');
+const path = require('path');
+const fs = require('fs');
 const http = require('http');
-const { Server } = require('socket.io');
+const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const { Server } = require('socket.io');
 
-const webhookRoute = require('./routes/webhookRoute');
-const chatRoute = require('./routes/chatRoute');
+const realtime = require('./services/realtime');
+const bootstrap = require('./services/bootstrap');
+const scheduler = require('./services/scheduler');
+const webhookRoute = require('./routes/webhook');
+const apiRoute = require('./routes/api');
 
 const app = express();
 const server = http.createServer(app);
 
-// 👈 ضع الروابط الصحيحة تماماً هنا
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "https://the-sahill-stays-integration.onrender.com"
-];
+app.set('trust proxy', 1);
+app.use(cors({ origin: config.corsOrigins, credentials: true, methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] }));
+// نحتفظ بالـ body الخام للتحقق من توقيع Meta وزائر
+app.use(express.json({ limit: '2mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 
-// إعداد CORS للـ Express (تأكد ألا تكتب app.use(cors()) مرتين لتجنب التضارب)
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
-  credentials: true
-}));
-
-app.use(bodyParser.json());
-
-// إعداد CORS للـ Socket.io
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PATCH"],
-    credentials: true
+const io = new Server(server, { cors: { origin: config.corsOrigins, credentials: true } });
+io.use((socket, next) => {
+  try {
+    jwt.verify(socket.handshake.auth?.token, config.auth.jwtSecret);
+    next();
+  } catch {
+    next(new Error('unauthorized'));
   }
 });
+realtime.setIo(io);
 
-app.set('io', io);
-
-io.on('connection', (socket) => {
-  console.log(`⚡ موظف متصل بالـ Socket ID: ${socket.id}`);
-  socket.on('disconnect', () => {
-    console.log(`🔌 انقطع اتصال الموظف: ${socket.id}`);
-  });
-});
-
-const MONGO_URI = process.env.MongoDB_URL;
-mongoose.connect(MONGO_URI)
-  .then(async () => {
-    console.log('✅ تم الاتصال بقاعدة البيانات MongoDB بنجاح');
-    try {
-      await mongoose.connection.collection('conversations').dropIndex('phone_1');
-    } catch (err) {}
-  })
-  .catch((err) => console.error('❌ خطأ في الاتصال بقاعدة البيانات:', err.message));
-
-app.get('/', (req, res) => {
-    res.status(200).send("Server is running with WebSockets! 🚀");
-});
-
+app.get('/health', (req, res) => res.json({ ok: true, db: mongoose.connection.readyState === 1, uptime: process.uptime() }));
 app.use('/webhook', webhookRoute);
-app.use('/api/dashboard', chatRoute);
+app.use('/api', apiRoute);
 
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
-    console.log(`🚀 Server & Socket.io running on port ${PORT}`);
+// واجهة اللوحة المبنية (npm run build في frontend) — نفس العملية ونفس الرابط
+const dist = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(dist)) {
+  app.use(express.static(dist));
+  app.get(/^\/(?!api|webhook|socket\.io).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')));
+} else {
+  app.get('/', (req, res) => res.send('Sahil Suite backend is running 🚀 (ابنِ الواجهة: cd frontend && npm run build)'));
+}
+
+// معالج الأخطاء العام
+app.use((err, req, res, next) => {
+  console.error('❌', req.method, req.path, err.message);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ message: err.message || 'خطأ في الخادم' });
+});
+
+process.on('unhandledRejection', (err) => console.error('⚠️ unhandledRejection:', err));
+
+async function start() {
+  if (!config.mongoUrl) throw new Error('MONGODB_URL مفقود في .env');
+  mongoose.connection.on('disconnected', () => console.warn('⚠️ انقطع الاتصال بـ MongoDB — جاري إعادة الاتصال...'));
+  mongoose.connection.on('reconnected', () => console.log('✅ أُعيد الاتصال بـ MongoDB'));
+  mongoose.connection.on('error', (err) => console.error('❌ MongoDB:', err.message));
+  await mongoose.connect(config.mongoUrl, {
+    family: 4, // IPv4 فقط — يحل ECONNRESET مع Atlas على بعض الشبكات/الراوترات
+    serverSelectionTimeoutMS: 20000,
+    socketTimeoutMS: 45000,
+    heartbeatFrequencyMS: 10000,
+    maxIdleTimeMS: 60000, // إغلاق الاتصالات الخاملة قبل أن يقطعها الراوتر/الجدار الناري
+    retryWrites: true,
+    retryReads: true,
+  });
+  console.log('✅ متصل بقاعدة البيانات');
+  await bootstrap.run();
+  if (!config.whatsapp.appSecret) console.warn('⚠️ META_APP_SECRET غير مضبوط — التحقق من توقيع الـ webhook معطّل');
+  const placeholder = (v) => /^0?790000000$|^962790000000$/.test(String(v || '').replace(/\D/g, '').replace(/^00/, ''));
+  if (placeholder(config.bootstrap.managerPhone)) console.warn('⚠️ MANAGER_PHONE ما زال الرقم التجريبي 0790000000 — ضع رقمك الحقيقي واحذف الموظف التجريبي من صفحة الموظفين');
+  if (placeholder(config.delivery.whatsapp)) console.warn('⚠️ DELIVERY_WHATSAPP ما زال الرقم التجريبي — ضع رقم جهة التوصيل أو اتركه فارغاً');
+  if (!config.whatsapp.verifyToken) console.warn('⚠️ VERIFY_TOKEN غير مضبوط — لن يُوثَّق الـ webhook في Meta');
+  scheduler.start();
+  server.listen(config.port, () => console.log(`🚀 السيرفر يعمل على المنفذ ${config.port}`));
+}
+
+start().catch((err) => {
+  console.error('❌ فشل التشغيل:', err.message);
+  process.exit(1);
 });

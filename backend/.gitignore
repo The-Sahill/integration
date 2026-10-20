@@ -1,11 +1,6 @@
-# node
 node_modules/
 .env
-dist/
-build/
-npm-debug.log
-.DS_Store
-
-# React
+uploads/*
+!uploads/.gitkeep
 *.log
-.cache/
+.DS_Store

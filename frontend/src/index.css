@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { @apply bg-slate-950 text-slate-100 font-sans antialiased; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { @apply bg-slate-700 rounded-full; }
+.ltr { direction: ltr; unicode-bidi: embed; }
+input, select, textarea { color-scheme: dark; }
