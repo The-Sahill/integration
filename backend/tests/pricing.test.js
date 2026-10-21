@@ -90,3 +90,39 @@ test('سيناريو التوثيق: 170 ← 162 ← 153 ← 145 ← تحت ال
   assert.strictEqual(acc.decision, 'accept');
   assert.strictEqual(acc.price, 150);
 });
+
+test('التسعير الذكي: الهامش حسب الإشغال ومدة الإقامة', () => {
+  const policy = require('../services/settings').DEFAULTS.dynamicPricing;
+  const d = (nights, occupancyPct) => pricing.dynamicDiscount(policy, { nights, occupancyPct });
+  assert.strictEqual(d(1, 10).maxDiscountPct, 0);   // ليلة واحدة = أعلى سعر حتى مع إشغال منخفض
+  assert.strictEqual(d(2, 90).maxDiscountPct, 0);   // شبه فل = سعر ثابت
+  assert.strictEqual(d(2, 70).maxDiscountPct, 5);
+  assert.strictEqual(d(2, 50).maxDiscountPct, 10);
+  assert.strictEqual(d(2, 20).maxDiscountPct, 15);
+  assert.strictEqual(d(7, 90).maxDiscountPct, 7);   // أسبوعي حتى مع إقبال عالٍ
+  assert.strictEqual(d(30, 20).maxDiscountPct, 30); // شهري + إشغال منخفض (بحد 30%)
+  assert.deepStrictEqual(d(2, 50).concessionSteps, [3.3, 6.7, 10]); // ثلث ← ثلثان ← كامل
+  assert.strictEqual(pricing.dynamicDiscount({ enabled: false }, { nights: 2, occupancyPct: 10 }), null);
+});
+
+test('التسعير الذكي: شقة 160 لليلتين بإشغال منخفض — التنازل بالتدريج ولا تحت 68×2', () => {
+  const policy = require('../services/settings').DEFAULTS.dynamicPricing;
+  const rule = { baseRate: 0, minRate: 68, useZaaerPrice: true, maxDiscountPct: 15, concessionSteps: [5, 10, 15] };
+  const eff = pricing.applyDynamic(rule, pricing.dynamicDiscount(policy, { nights: 2, occupancyPct: 20 }));
+  const q = pricing.quote(eff, '2026-10-22', '2026-10-24', { zaaerAmount: 160 });
+  assert.strictEqual(q.listTotal, 160);
+  assert.strictEqual(q.floorTotal, 136);
+  let st = { listPrice: 160, floorPrice: q.floorTotal, currentOffer: 160, round: 0, nights: 2 };
+  const r1 = pricing.negotiateRound(st, eff, 100);
+  assert.strictEqual(r1.price, 152); // 5% أولاً وليس الحد
+  st = { ...st, currentOffer: r1.price, round: r1.round };
+  const r2 = pricing.negotiateRound(st, eff, 100);
+  assert.strictEqual(r2.price, 144);
+});
+
+test('التسعير الذكي: الإقامة الشهرية تستخدم الحد الشهري بدل حد الليلة', () => {
+  const rule = { minRate: 68, monthlyMinRate: 1900 };
+  const eff = pricing.applyDynamic(rule, { maxDiscountPct: 30, concessionSteps: [10, 20, 30], nights: 30 });
+  assert.ok(Math.abs(eff.minRate - 1900 / 30) < 0.01);
+  assert.strictEqual(pricing.applyDynamic(rule, { maxDiscountPct: 10, concessionSteps: [], nights: 7 }).minRate, 68);
+});

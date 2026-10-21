@@ -7,7 +7,7 @@ const messenger = require('./messenger');
 const audit = require('./audit');
 const realtime = require('./realtime');
 const config = require('../config');
-const { isISODate, shortRef, todayISO, normalizePhone } = require('../utils/helpers');
+const { isISODate, shortRef, todayISO, normalizePhone, nightsBetween } = require('../utils/helpers');
 
 const STAGE_ORDER = ['new', 'quoted', 'negotiating', 'hold', 'awaiting_payment', 'paid', 'zaaer_entered', 'confirmed'];
 
@@ -80,6 +80,59 @@ async function checkAvailability({ checkIn, checkOut, adults = 1, children = 0, 
   return { check_in: checkIn, check_out: checkOut, options: results };
 }
 
+/**
+ * إشغال المنشأة % للتواريخ المطلوبة = متوسط إشغال الليالي من حجوزات زائر (المحمّلة مسبقاً)
+ * بديل إن لم تكن محمّلة: quote لكل نوع — أقل دقة للإقامات الطويلة (ليلة واحدة ممتلئة تجعل النوع "غير متاح" للفترة كلها)
+ */
+async function occupancyFor(checkIn, checkOut) {
+  const rules = (await listRules()).filter((r) => Number(r.unitsCount) > 0);
+  const units = rules.reduce((s, r) => s + Number(r.unitsCount), 0);
+  const raw = zaaer.cachedReservations();
+  if (raw && units) {
+    const { normalizeReservation } = require('./analytics');
+    const nights = nightsBetween(checkIn, checkOut);
+    const active = raw.map(normalizeReservation).filter((r) => !r.cancelled && r.checkIn < checkOut && r.checkOut > checkIn);
+    const occupied = nights.reduce((s, d) => s + active.filter((r) => r.checkIn <= d && r.checkOut > d).reduce((n, r) => n + (r.rooms || 1), 0), 0);
+    return Math.min(100, Math.round((occupied / (units * nights.length)) * 100));
+  }
+  return occupancyFromQuotes(rules, checkIn, checkOut);
+}
+
+async function occupancyFromQuotes(rules, checkIn, checkOut) {
+  const res = await Promise.all(rules.map((r) => zaaer.checkAvailability({ unitTypeId: r.zaaerUnitTypeId, ratePlanId: r.ratePlanId, checkIn, checkOut }).catch(() => null)));
+  let total = 0;
+  let free = 0;
+  rules.forEach((r, i) => {
+    const a = res[i];
+    if (!a || a.error) return;
+    const units = Number(r.unitsCount);
+    total += units;
+    free += a.available ? Math.min(units, a.availableCount ?? units) : 0;
+  });
+  return total ? Math.round((1 - free / total) * 100) : null;
+}
+
+/** ملاحظة للـ AI تشرح سبب مرونة السعر (بدون كشف أرقام الهامش) */
+function policyNote(dyn) {
+  if (!dyn) return '';
+  if (dyn.nights <= 1 && !dyn.maxDiscountPct) return 'سعر الليلة الواحدة ثابت: لا تخفّضه. إن أصرّ العميل اقترح إقامة أطول بسعر أفضل لليلة، أو ارفع طلبه للإدارة.';
+  if (!dyn.maxDiscountPct) return 'الإقبال عالٍ جداً على هذه التواريخ والسعر ثابت: أبرز أن الشقق شبه محجوزة.';
+  if (dyn.nights >= 28) return 'إقامة شهرية: يمكنك ذكر أن للإقامة الطويلة تقديراً خاصاً في السعر.';
+  if (dyn.nights >= 7) return 'إقامة أسبوعية: يمكنك ذكر أن للإقامة الأسبوعية تقديراً خاصاً في السعر.';
+  if (dyn.occupancyPct >= 65) return 'الإقبال جيد على هذه التواريخ: تنازل بهدوء ولا تستعجل.';
+  return '';
+}
+
+/** قاعدة السعر بعد التسعير الذكي (إشغال التواريخ + مدة الإقامة) — أو القاعدة كما هي إن كان معطلاً/تعذر الإشغال */
+async function dynamicRuleFor(rule, checkIn, checkOut) {
+  const policy = settings.get('dynamicPricing');
+  if (!policy?.enabled) return { effRule: rule, dyn: null };
+  const occupancyPct = await occupancyFor(checkIn, checkOut);
+  if (occupancyPct === null) return { effRule: rule, dyn: null }; // بدون بيانات إشغال: قاعدة النوع الثابتة (الأحوط)
+  const dyn = pricing.dynamicDiscount(policy, { nights: nightsBetween(checkIn, checkOut).length, occupancyPct });
+  return { effRule: pricing.applyDynamic(rule, dyn), dyn };
+}
+
 /** عرض سعر رسمي لنوع واحد + فتح سجل تفاوض */
 async function priceQuote(conversation, { unitRef, checkIn, checkOut, adults = 1, children = 0 }) {
   validateDates(checkIn, checkOut);
@@ -88,14 +141,18 @@ async function priceQuote(conversation, { unitRef, checkIn, checkOut, adults = 1
   const a = await zaaer.checkAvailability({ unitTypeId: rule.zaaerUnitTypeId, ratePlanId: rule.ratePlanId, checkIn, checkOut, adults, children });
   if (a.error) throw new Error('تعذر التحقق من التوفر حالياً');
   if (!a.available) return { available: false, unit: rule.name };
-  const q = pricing.quote(rule, checkIn, checkOut, { zaaerAmount: a.amount });
+  let q = pricing.quote(rule, checkIn, checkOut, { zaaerAmount: a.amount });
 
   let neg = await Negotiation.findOne({ conversationId: conversation._id, pricingRuleId: rule._id, checkIn, checkOut, status: { $in: ['open', 'accepted', 'approved', 'approval_pending'] } });
   if (!neg) {
+    // السعر الأول دائماً الأعلى؛ الهامش (والحد) يُحسب حسب الإشغال والمدة ويُثبَّت لهذا التفاوض
+    const { effRule, dyn } = await dynamicRuleFor(rule, checkIn, checkOut);
+    q = pricing.quote(effRule, checkIn, checkOut, { zaaerAmount: a.amount });
     neg = await Negotiation.create({
       conversationId: conversation._id, phone: conversation.customerPhone, pricingRuleId: rule._id, unitName: rule.name,
       checkIn, checkOut, nights: q.nights, listPrice: q.listTotal, floorPrice: q.floorTotal, currentOffer: q.listTotal,
       offers: [{ by: 'hotel', amount: q.listTotal, note: 'السعر الأول' }],
+      policy: dyn ? { occupancyPct: dyn.occupancyPct, maxDiscountPct: dyn.maxDiscountPct, steps: dyn.concessionSteps, minRate: effRule.minRate, note: policyNote(dyn) } : undefined,
     });
   }
   await setStage(conversation._id, STAGE_ORDER.indexOf(conversation.stage) > 1 ? conversation.stage : 'quoted', {
@@ -110,6 +167,7 @@ async function priceQuote(conversation, { unitRef, checkIn, checkOut, adults = 1
     price_per_night: Math.round((neg.finalPrice || neg.currentOffer) / q.nights),
     currency: config.zaaer.currency,
     negotiation_status: neg.status,
+    ...(neg.policy?.note ? { pricing_note: neg.policy.note } : {}),
   };
 }
 
@@ -134,9 +192,11 @@ async function negotiate(conversation, { unitRef, checkIn, checkOut, customerOff
     } else return { status: 'agreed', price_total: neg.finalPrice };
   }
 
+  // هامش وخطوات هذا التفاوض كما ثُبّتت عند فتحه (التسعير الذكي) — أو قاعدة النوع للتفاوضات القديمة
+  const negRule = neg.policy?.maxDiscountPct != null ? { ...rule, maxDiscountPct: neg.policy.maxDiscountPct, concessionSteps: neg.policy.steps } : rule;
   const result = pricing.negotiateRound(
     { listPrice: neg.listPrice, floorPrice: neg.floorPrice, currentOffer: neg.currentOffer, round: neg.round, nights: neg.nights },
-    rule,
+    negRule,
     customerOffer
   );
   if (customerOffer) neg.offers.push({ by: 'guest', amount: customerOffer });
@@ -167,6 +227,7 @@ async function negotiate(conversation, { unitRef, checkIn, checkOut, customerOff
       message: 'لا يمكنك النزول أكثر. قل للعميل إن هذا السعر يحتاج موافقة خاصة من الإدارة، واعرض أن ترفع طلبه (request_manager_approval) أو قدّم البدائل. لا تذكر "حداً" أو "المسموح" أو أي هامش.',
     };
   }
+  if (neg.policy?.note && response.status !== 'agreed') response.pricing_note = neg.policy.note;
   await neg.save();
   await setStage(conversation._id, response.status === 'agreed' ? 'negotiating' : 'negotiating', { quotedPrice: neg.currentOffer, agreedPrice: neg.finalPrice || null, negotiationId: String(neg._id) });
   return response;
@@ -193,7 +254,8 @@ async function createHold(conversation, { unitRef, checkIn, checkOut, adults, ch
   const q = pricing.quote(rule, checkIn, checkOut, { zaaerAmount: a.amount });
   const neg = await Negotiation.findOne({ conversationId: conversation._id, pricingRuleId: rule._id, checkIn, checkOut, status: { $in: ['accepted', 'approved', 'open'] } }).sort({ updatedAt: -1 });
   const agreed = neg?.finalPrice || neg?.currentOffer || q.listTotal;
-  const price = Math.max(agreed, neg?.status === 'approved' ? 0 : q.floorTotal); // الحد الأدنى إلا بموافقة المدير
+  // الحد الأدنى إلا بموافقة المدير — حد التفاوض نفسه (التسعير الذكي) وليس حد قاعدة النوع الثابتة
+  const price = Math.max(agreed, neg?.status === 'approved' ? 0 : neg ? neg.floorPrice : q.floorTotal);
 
   // حجز سابق نشط لنفس المحادثة؟ نلغيه (في زائر أيضاً) ونستبدله
   const previous = await Booking.find({ conversationId: conversation._id, status: { $in: ['hold', 'awaiting_payment'] } });
@@ -725,4 +787,4 @@ async function expireHolds() {
   }
 }
 
-module.exports = { checkAvailability, priceQuote, negotiate, createHold, finalizeBooking, staffBooking, validateStaffBooking, previewModification, checkoutBlock, findZaaerReservation, zaaerLabel, modifyBooking, checkInGuest, checkOutGuest, issueReceipt, findBooking, cancel, expireHolds, findRule, listRules, setStage, validateDates, buildZaaerPayload, spreadDailyRates };
+module.exports = { checkAvailability, priceQuote, negotiate, createHold, finalizeBooking, staffBooking, validateStaffBooking, previewModification, checkoutBlock, findZaaerReservation, zaaerLabel, dynamicRuleFor, occupancyFor, modifyBooking, checkInGuest, checkOutGuest, issueReceipt, findBooking, cancel, expireHolds, findRule, listRules, setStage, validateDates, buildZaaerPayload, spreadDailyRates };

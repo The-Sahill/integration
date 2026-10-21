@@ -30,6 +30,7 @@ function extractUnitTypes(properties) {
           maxAdults: Number(t?.max_adults ?? t?.max_occupancy ?? t?.occupancy?.adults ?? t?.capacity) || 4,
           unitsCount: Number(t?.total_units ?? t?.units_count ?? t?.units?.length ?? t?.count ?? t?.number_of_units) || 1,
           minRate: Number(t?.base_rate_plan?.min_rate) || 0, // أقل سعر لليلة كما ضبطته المنشأة في زائر
+          monthlyMinRate: Number(t?.base_rate_plan?.monthly_min_rate) || 0,
           description: String(t?.description?.ar ?? t?.description ?? '').slice(0, 300),
         });
       }
@@ -114,6 +115,7 @@ async function importFromZaaer() {
       if (t.unitsCount > 1 && existing.unitsCount !== t.unitsCount) set.unitsCount = t.unitsCount;
       if (t.ratePlanId && !existing.ratePlanId) set.ratePlanId = t.ratePlanId;
       if (t.minRate > 0 && !existing.minRate) set.minRate = t.minRate;
+      if (t.monthlyMinRate > 0 && !existing.monthlyMinRate) set.monthlyMinRate = t.monthlyMinRate;
       if (Object.keys(set).length) {
         await PricingRule.updateOne({ _id: existing._id }, { $set: set });
         updated++;

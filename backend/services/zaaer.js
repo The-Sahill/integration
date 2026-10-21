@@ -84,6 +84,17 @@ function getProperties() {
   return cached('properties', 10 * 60000, () => getAllPages('/properties'));
 }
 
+/**
+ * الحجوزات المحمّلة مسبقاً إن كان عمرها ≤ maxAgeMs، وإلا null مع تحميلها في الخلفية
+ * (للتسعير أثناء المحادثة: لا ننتظر 10 ثوانٍ لجلب كل الصفحات)
+ */
+function cachedReservations(maxAgeMs = 15 * 60000) {
+  const hit = cache.get('reservations');
+  if (hit && Date.now() - hit.at < maxAgeMs) return hit.value;
+  getAllReservations().catch(() => {});
+  return null;
+}
+
 /** كل الحجوزات (cache دقيقة) */
 function getAllReservations() {
   return cached('reservations', 3 * 60000, () => getAllPages('/reservations')); // يُمسح فوراً بعد أي كتابة في زائر
@@ -171,6 +182,7 @@ async function checkAvailability({ unitTypeId, ratePlanId, checkIn, checkOut, ad
       amount: Number(room?.amount || data?.totals?.total || 0),
       dailyRates: room?.daily_rates || [],
       ratePlanId: room?.rate_plan_id || ratePlanId || null,
+      availableCount: room?.available_count != null ? Number(room.available_count) : null, // وحدات شاغرة من هذا النوع (للإشغال)
       unitTypeId: room?.unit_type_id || unitTypeId,
       raw: data,
     };
@@ -354,6 +366,7 @@ module.exports = {
   getProperties,
   rawGet,
   getAllReservations,
+  cachedReservations,
   getReservationsByPhone,
   getReservationByBookingId,
   searchReservations,

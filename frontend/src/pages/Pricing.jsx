@@ -78,6 +78,53 @@ function RuleForm({ value, onChange }) {
   )
 }
 
+/** التسعير الذكي: هامش التفاوض حسب إشغال التواريخ ومدة الإقامة (settings.dynamicPricing) */
+function SmartPricing() {
+  const [p, setP] = useState(null)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { api.get('/settings').then(({ data }) => setP(data.settings.dynamicPricing)) }, [])
+  if (!p) return null
+  const setBand = (key, i, field, val) => setP({ ...p, [key]: p[key].map((b, j) => (j === i ? { ...b, [field]: val === '' ? '' : Number(val) } : b)) })
+  const save = async () => {
+    setSaving(true)
+    try { await api.put('/settings', { dynamicPricing: p }); alert('تم الحفظ ✅ — يُطبَّق على التفاوضات الجديدة') } catch (e) { alert(errMsg(e)) } finally { setSaving(false) }
+  }
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <Toggle checked={p.enabled} onChange={(v) => setP({ ...p, enabled: v })} label="تفعيل التسعير الذكي" />
+        <p className="mt-2 text-xs leading-6 text-slate-400">
+          السعر الأول للعميل دائماً هو الأعلى (سعر زائر). هامش التنازل يُحسب عند بداية كل تفاوض من <b>إشغال المنشأة لتواريخ العميل</b> و<b>عدد الليالي</b>، ويُوزَّع على 3 خطوات (ثلث ← ثلثان ← كامل).
+          لا ينزل أبداً تحت «الحد الأدنى» لكل نوع (وللإقامات 28+ ليلة: الحد الشهري من زائر). عند التعطيل تُستخدم «أقصى خصم» و«الخطوات» من قواعد الأسعار.
+        </p>
+      </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card title="حسب الإشغال" className="p-4">
+          {p.occupancyBands.map((b, i) => (
+            <div key={i} className="mb-2 grid grid-cols-2 gap-2">
+              <Field label="إذا الإشغال ≥ %"><Input type="number" value={b.minOcc} onChange={(e) => setBand('occupancyBands', i, 'minOcc', e.target.value)} /></Field>
+              <Field label="أقصى خصم %"><Input type="number" value={b.maxDiscountPct} onChange={(e) => setBand('occupancyBands', i, 'maxDiscountPct', e.target.value)} /></Field>
+            </div>
+          ))}
+        </Card>
+        <Card title="حسب مدة الإقامة (خصم إضافي)" className="p-4">
+          {p.lengthBands.map((b, i) => (
+            <div key={i} className="mb-2 grid grid-cols-2 gap-2">
+              <Field label="إذا الليالي ≥"><Input type="number" value={b.minNights} onChange={(e) => setBand('lengthBands', i, 'minNights', e.target.value)} /></Field>
+              <Field label="خصم إضافي %"><Input type="number" value={b.extraPct} onChange={(e) => setBand('lengthBands', i, 'extraPct', e.target.value)} /></Field>
+            </div>
+          ))}
+        </Card>
+      </div>
+      <Card className="grid gap-3 p-4 sm:grid-cols-2">
+        <Field label="أقصى خصم لليلة الواحدة %" hint="0 = أعلى سعر دائماً"><Input type="number" value={p.oneNightMaxPct} onChange={(e) => setP({ ...p, oneNightMaxPct: Number(e.target.value) })} /></Field>
+        <Field label="سقف الخصم الكلي %"><Input type="number" value={p.maxTotalPct} onChange={(e) => setP({ ...p, maxTotalPct: Number(e.target.value) })} /></Field>
+      </Card>
+      <Button onClick={save} loading={saving}>حفظ</Button>
+    </div>
+  )
+}
+
 export default function Pricing() {
   const [tab, setTab] = useState('rules')
   const [rules, setRules] = useState([])
@@ -151,8 +198,9 @@ export default function Pricing() {
           <Button size="sm" onClick={() => setEditing({ ...EMPTY })}><Plus className="h-4 w-4" />نوع وحدة</Button>
         </>}
       />
-      <Tabs tabs={[{ value: 'rules', label: 'قواعد الأسعار' }, { value: 'neg', label: 'سجل التفاوض', count: neg.items.length }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ value: 'rules', label: 'قواعد الأسعار' }, { value: 'smart', label: 'التسعير الذكي' }, { value: 'neg', label: 'سجل التفاوض', count: neg.items.length }]} value={tab} onChange={setTab} />
       {tab === 'rules' && <Table columns={ruleCols} rows={rules} empty="أضف أنواع الوحدات وربطها بـ unit_type_id في زائر" />}
+      {tab === 'smart' && <SmartPricing />}
       {tab === 'neg' && (
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -92,6 +92,25 @@ const DEFAULTS = {
   summaryEvery: 20, // حدّث الملخص كل 20 رسالة جديدة
   voiceReplyEnabled: false, // الرد بصوت عندما يرسل العميل صوتاً (يتطلب ffmpeg)
 
+  // التسعير الذكي: هامش التفاوض حسب إشغال المنشأة للتواريخ المطلوبة ومدة الإقامة (السعر الأول دائماً الأعلى)
+  dynamicPricing: {
+    enabled: true,
+    occupancyBands: [ // من الأعلى: إشغال ≥ minOcc% ← أقصى خصم
+      { minOcc: 85, maxDiscountPct: 0 },
+      { minOcc: 65, maxDiscountPct: 5 },
+      { minOcc: 40, maxDiscountPct: 10 },
+      { minOcc: 0, maxDiscountPct: 15 },
+    ],
+    lengthBands: [ // خصم إضافي حسب عدد الليالي
+      { minNights: 28, extraPct: 15 },
+      { minNights: 7, extraPct: 7 },
+      { minNights: 3, extraPct: 3 },
+      { minNights: 1, extraPct: 0 },
+    ],
+    oneNightMaxPct: 0, // ليلة واحدة = أعلى سعر
+    maxTotalPct: 30,
+  },
+
   // الحجز والمتابعة (بالدقائق)
   holdMinutes: 120,
   followUp1Minutes: 60,

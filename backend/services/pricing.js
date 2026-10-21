@@ -104,7 +104,31 @@ function negotiateRound(state, rule, customerOffer) {
   return { decision: 'below_floor', price: floor, round };
 }
 
-module.exports = { nightlyRate, quote, priceAtStep, negotiateRound, alternatives, steps, inSeason };
+/**
+ * التسعير الذكي: هامش التفاوض حسب إشغال المنشأة للتواريخ المطلوبة ومدة الإقامة
+ * policy: settings.dynamicPricing — يُرجع null إن كان معطلاً (فتُستخدم قاعدة نوع الوحدة كما هي)
+ *  - ليلة واحدة: حتى oneNightMaxPct (افتراضياً 0 = أعلى سعر)
+ *  - غير ذلك: خصم الإشغال + إضافة المدة، بحد أقصى maxTotalPct
+ *  - الخطوات: ثلث ← ثلثان ← كامل الهامش (لا يعطي الأقل من أول مرة)
+ */
+function dynamicDiscount(policy, { nights, occupancyPct }) {
+  if (!policy?.enabled) return null;
+  const occBand = [...(policy.occupancyBands || [])].sort((a, b) => b.minOcc - a.minOcc).find((b) => occupancyPct >= b.minOcc) || { minOcc: 0, maxDiscountPct: 0 };
+  const lenBand = [...(policy.lengthBands || [])].sort((a, b) => b.minNights - a.minNights).find((b) => nights >= b.minNights) || { minNights: 1, extraPct: 0 };
+  let pct = nights <= 1 ? Math.min(Number(occBand.maxDiscountPct) || 0, Number(policy.oneNightMaxPct) || 0) : (Number(occBand.maxDiscountPct) || 0) + (Number(lenBand.extraPct) || 0);
+  pct = Math.max(0, Math.min(pct, Number(policy.maxTotalPct ?? 30)));
+  const stepsPct = pct > 0 ? [...new Set([1 / 3, 2 / 3, 1].map((f) => Math.round(pct * f * 10) / 10).filter((x) => x > 0))] : [];
+  return { maxDiscountPct: pct, concessionSteps: stepsPct, occupancyPct, nights, occBand, lenBand };
+}
+
+/** قاعدة نوع الوحدة بعد تطبيق التسعير الذكي (الهامش والخطوات، والحد الأدنى الشهري للإقامات 28+ ليلة) */
+function applyDynamic(rule, dyn) {
+  if (!dyn) return rule;
+  const monthly = dyn.nights >= 28 && Number(rule.monthlyMinRate) > 0;
+  return { ...rule, maxDiscountPct: dyn.maxDiscountPct, concessionSteps: dyn.concessionSteps, minRate: monthly ? Number(rule.monthlyMinRate) / 30 : rule.minRate };
+}
+
+module.exports = { nightlyRate, quote, priceAtStep, negotiateRound, alternatives, steps, inSeason, dynamicDiscount, applyDynamic };
 
 
 

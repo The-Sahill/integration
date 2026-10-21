@@ -22,6 +22,8 @@ const negotiationSchema = new mongoose.Schema(
       index: true,
     },
     finalPrice: Number,
+    // التسعير الذكي وقت فتح التفاوض: الإشغال والهامش والخطوات (يبقى ثابتاً طوال هذا التفاوض)
+    policy: { occupancyPct: Number, maxDiscountPct: Number, steps: [Number], minRate: Number, note: String },
     closedAt: Date,
   },
   { timestamps: true }

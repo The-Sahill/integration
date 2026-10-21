@@ -22,6 +22,7 @@ const pricingRuleSchema = new mongoose.Schema(
       },
     ],
     minRate: { type: Number, required: true },         // أقل سعر مسموح لليلة — لا يُتجاوز أبداً
+    monthlyMinRate: { type: Number },                  // أقل سعر شهري (من زائر) — حد الإقامات 28+ ليلة بدل minRate
     maxDiscountPct: { type: Number, default: 15 },     // أقصى نسبة خصم من السعر الأساسي
     concessionSteps: { type: [Number], default: [5, 10, 15] }, // خطوات التنازل كنسبة مئوية تراكمية
     alternatives: {
