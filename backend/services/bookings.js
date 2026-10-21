@@ -498,10 +498,64 @@ async function planModification(staff, booking, changes = {}, { fresh = false } 
   return { changed: true, rule, a, q, checkIn, checkOut, newPrice, dailyRates: a.dailyRates };
 }
 
-/** معاينة التعديل لرسالة التأكيد: { booking, plan } أو خطأ */
+const ZAAER_CLOSED = ['cancelled', 'canceled', 'checked_out', 'no_show'];
+
+/**
+ * حجز في زائر غير مُنشأ عبر النظام (walk-in / OTA): برقم REV، أو رقم الوحدة ("غرفة 1")، أو اسم/هاتف
+ * عند البحث بالوحدة أو الاسم نختار الأنسب: المقيم الآن ← الحالي ← القادم، والملغى أخيراً
+ */
+async function findZaaerReservation(ref) {
+  const s = String(ref || '').trim();
+  if (!s) return null;
+  const unit = s.match(/^(?:غرفة|غرفه|شقة|شقه|الشقة|الغرفة|وحدة|room|unit)?\s*#?\s*(\d{1,4})$/i);
+  let list;
+  if (/^rev\d+$/i.test(s)) return (await zaaer.searchReservations(s))[0] || null;
+  if (unit) {
+    const all = await zaaer.getAllReservations();
+    list = all.filter((r) => (r.rooms || []).some((x) => String(x.unit_name ?? '').trim() === unit[1] || String(x.unit_number ?? '') === unit[1]));
+  } else {
+    list = /\d{6,}/.test(s.replace(/\D/g, '')) ? await zaaer.getReservationsByPhone(s) : await zaaer.searchReservations(s);
+  }
+  const today = todayISO(config.timezone);
+  const rank = (r) => {
+    const st = String(r.reservation_status || '').toLowerCase();
+    if (st === 'checked_in') return 0;
+    if (ZAAER_CLOSED.includes(st)) return 9;
+    if (r.check_in_date <= today && r.check_out_date >= today) return 1;
+    if (r.check_in_date > today) return 2;
+    return 5;
+  };
+  return list.sort((a, b) => rank(a) - rank(b) || String(a.check_in_date).localeCompare(String(b.check_in_date)))[0] || null;
+}
+
+function zaaerLabel(r) {
+  const units = (r.rooms || []).map((x) => x.unit_name).filter(Boolean).join('، ');
+  return `${r.number} — ${r.guest?.name || '-'} (شقة ${units || '-'}، ${r.check_in_date} ← ${r.check_out_date}، ${r.reservation_status})`;
+}
+
+function changesText(changes, r = {}) {
+  return [
+    changes.checkIn && `الوصول ${r.check_in_date || ''} ← ${changes.checkIn}`,
+    changes.checkOut && `المغادرة ${r.check_out_date || ''} ← ${changes.checkOut}`,
+    changes.unitRef && `الوحدة ← ${changes.unitRef}`,
+    changes.price && `السعر ← ${changes.price}`,
+    changes.guestName && `الاسم ← ${changes.guestName}`,
+    changes.adults && `البالغين ← ${changes.adults}`,
+  ].filter(Boolean).join('، ') || JSON.stringify(changes);
+}
+
+/** حجز زائر فقط: يُرفض إن كان ملغى/منتهياً — وإلا { reservation } */
+async function resolveZaaerOnly(ref) {
+  const r = await findZaaerReservation(ref);
+  if (!r) throw new Error(`لم أجد الحجز "${ref}" لا في النظام ولا في زائر`);
+  if (ZAAER_CLOSED.includes(String(r.reservation_status).toLowerCase())) throw new Error(`الحجز ${zaaerLabel(r)} ملغى أو منتهٍ في زائر — لا يمكن تعديله`);
+  return r;
+}
+
+/** معاينة التعديل لرسالة التأكيد: { booking, plan } أو { zaaerReservation } لحجز زائر فقط، أو خطأ */
 async function previewModification(staff, ref, changes) {
   const booking = await findBooking(ref);
-  if (!booking) return { booking: null };
+  if (!booking) return { booking: null, zaaerReservation: await resolveZaaerOnly(ref) };
   if (['cancelled', 'expired', 'checked_out'].includes(booking.status)) throw new Error(`لا يمكن تعديل حجز حالته ${booking.status}`);
   return { booking, plan: await planModification(staff, booking, changes) };
 }
@@ -510,8 +564,19 @@ async function previewModification(staff, ref, changes) {
 async function modifyBooking(staff, ref, changes = {}) {
   const booking = await findBooking(ref);
   if (!booking) {
-    await notifyManual('تعديل', ref, staff.name, JSON.stringify(changes));
-    return { ok: false, manual: true, message: `لم أجد الحجز "${ref}" في النظام — أُرسل تنبيه للاستقبال لتعديله يدوياً في زائر` };
+    // حجز أُدخل في زائر يدوياً أو من OTA: زائر يسمح بتعديل حجوزات الـ API فقط (بـ booking_id الخاص بنا)
+    let r;
+    try {
+      r = await resolveZaaerOnly(ref);
+    } catch (err) {
+      return { ok: false, message: err.message };
+    }
+    const what = changesText(changes, r);
+    await notifyManual('تعديل', zaaerLabel(r), staff.name, what);
+    return {
+      ok: false, manual: true,
+      message: `الحجز ${zaaerLabel(r)} مُدخل في زائر ${r.booking_source === 'ota' ? 'من منصة حجز' : 'يدوياً'} — زائر لا يسمح بتعديله عبر الـ API.\nأُرسل للاستقبال لتنفيذه يدوياً: ${what}`,
+    };
   }
   if (['cancelled', 'expired', 'checked_out'].includes(booking.status)) return { ok: false, message: `لا يمكن تعديل حجز حالته ${booking.status}` };
   const before = { checkIn: booking.checkIn, checkOut: booking.checkOut, unitName: booking.unitName, price: booking.agreedPrice, guestName: booking.guestName };
@@ -551,7 +616,7 @@ async function modifyBooking(staff, ref, changes = {}) {
 /** تسجيل الوصول / المغادرة */
 async function checkInGuest(staff, ref, roomNumber) {
   const booking = await findBooking(ref);
-  const zaaerId = booking?.zaaerReservationId || (!booking ? ref : null);
+  const zaaerId = booking?.zaaerReservationId || (!booking ? (await findZaaerReservation(ref).catch(() => null))?.number || ref : null);
   const r = await zaaer.checkIn({ reservationId: zaaerId, bookingId: booking?.ref, unitNumber: roomNumber });
   if (!r.success && !r.manual) return { ok: false, message: `رفض زائر تسجيل الوصول: ${JSON.stringify(r.error).slice(0, 200)}` };
   if (r.manual) await notifyManual('تسجيل وصول', `${zaaerId || ref}${roomNumber ? ` — غرفة ${roomNumber}` : ''}`, staff.name, '');
@@ -587,7 +652,7 @@ async function checkOutGuest(staff, ref) {
   // الرصيد أولاً — قبل أي استدعاء لزائر أو تنبيه يدوي (وإلا يُسجَّل الخروج في زائر رغم الرفض)
   const blocked = checkoutBlock(booking);
   if (blocked) return { ok: false, message: blocked };
-  const zaaerId = booking?.zaaerReservationId || (!booking ? ref : null);
+  const zaaerId = booking?.zaaerReservationId || (!booking ? (await findZaaerReservation(ref).catch(() => null))?.number || ref : null);
   const r = await zaaer.checkOut({ reservationId: zaaerId, bookingId: booking?.ref });
   if (!r.success && !r.manual) return { ok: false, message: `رفض زائر تسجيل المغادرة: ${JSON.stringify(r.error).slice(0, 200)}` };
   if (r.manual) await notifyManual('تسجيل مغادرة', zaaerId || ref, staff.name, '');
@@ -660,4 +725,4 @@ async function expireHolds() {
   }
 }
 
-module.exports = { checkAvailability, priceQuote, negotiate, createHold, finalizeBooking, staffBooking, validateStaffBooking, previewModification, checkoutBlock, modifyBooking, checkInGuest, checkOutGuest, issueReceipt, findBooking, cancel, expireHolds, findRule, listRules, setStage, validateDates, buildZaaerPayload, spreadDailyRates };
+module.exports = { checkAvailability, priceQuote, negotiate, createHold, finalizeBooking, staffBooking, validateStaffBooking, previewModification, checkoutBlock, findZaaerReservation, zaaerLabel, modifyBooking, checkInGuest, checkOutGuest, issueReceipt, findBooking, cancel, expireHolds, findRule, listRules, setStage, validateDates, buildZaaerPayload, spreadDailyRates };

@@ -157,7 +157,7 @@ const DECLARATIONS = {
   modify_booking: {
     description: 'تعديل حجز موجود (تواريخ، نوع الوحدة، السعر، اسم النزيل، العدد). يُعدَّل في زائر مباشرة.',
     parameters: obj({
-      booking_ref: S('رقم الحجز (B-xxx أو رقم زائر) أو اسم/رقم النزيل'), check_in: S(DATE), check_out: S(DATE), unit_id: S('نوع الوحدة الجديد'),
+      booking_ref: S('رقم الحجز (B-xxx أو REV...) أو اسم/هاتف النزيل أو رقم الشقة كما قاله الموظف (مثلاً "غرفة 1")'), check_in: S(DATE), check_out: S(DATE), unit_id: S('نوع الوحدة الجديد'),
       price: N('السعر الإجمالي الجديد (اختياري)'), guest_name: S(''), adults: I(''), children: I(''), notes: S(''), notify_guest: { type: 'BOOLEAN', description: 'إبلاغ النزيل (افتراضي نعم)' },
     }, ['booking_ref']),
   },
@@ -304,7 +304,11 @@ async function execute(name, args = {}, ctx = {}) {
     if (name === 'modify_booking') {
       // الموظف يرى السعر الجديد والمتبقي قبل أن يضغط "نعم"
       try {
-        const { booking, plan } = await bookings.previewModification(actor, args.booking_ref, { checkIn: args.check_in, checkOut: args.check_out, unitRef: args.unit_id, price: args.price, adults: args.adults, children: args.children });
+        const { booking, plan, zaaerReservation } = await bookings.previewModification(actor, args.booking_ref, { checkIn: args.check_in, checkOut: args.check_out, unitRef: args.unit_id, price: args.price, adults: args.adults, children: args.children });
+        if (zaaerReservation) {
+          args = { ...args, booking_ref: zaaerReservation.number }; // ينفَّذ على نفس الحجز الذي رآه الموظف
+          extra = `\n• الحجز في زائر: ${bookings.zaaerLabel(zaaerReservation)}\n⚠️ مُدخل في زائر يدوياً/من منصة حجز: زائر لا يسمح بتعديله آلياً — عند "نعم" يُرسل للاستقبال لتنفيذه يدوياً`;
+        }
         if (booking) {
           extra = `\n• الحجز: ${booking.zaaerReservationId || booking.ref} — ${booking.guestName} (${booking.unitName} ${booking.checkIn} ← ${booking.checkOut})`;
           if (plan.changed) extra += `\n• السعر الجديد: ${plan.newPrice} ${booking.currency} (كان ${booking.agreedPrice}) — المدفوع ${booking.paidAmount || 0}، المتبقي ${Math.max(0, plan.newPrice - (booking.paidAmount || 0))}`;
